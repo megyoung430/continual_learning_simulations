@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
-from networks import AuditoryDiscriminationNetwork
+from ..models.networks import AuditoryDiscriminationNetwork
 
 def get_trial_type(p_train=0.8, p_test=0.5):
     """This function determines the type of the upcoming trial.
