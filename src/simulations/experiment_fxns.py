@@ -1,4 +1,5 @@
-"""This file specifies all the functions needed to run a complete simulation our continual learning task."""
+"""This file specifies all the functions needed to run a complete simulation of 
+our continual learning task."""
 
 import random
 import pickle
@@ -6,7 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
-from ..models.networks import AuditoryDiscriminationNetwork
+from ..models.networks import DeepAuditoryDiscriminationNetwork
 
 def get_trial_type(p_train=0.8, p_test=0.5):
     """This function determines the type of the upcoming trial.
@@ -28,7 +29,25 @@ def get_trial_type(p_train=0.8, p_test=0.5):
         else:
             return "validation"
 
-def get_stimulus(trial_type, task_id=0, thetas=[0,90], p_stim_right=0.5, num_notes=7):
+def get_general_stimulus(p_stim_right=0.5):
+    """_summary_
+
+    Args:
+        p_stim_right (float, optional): _description_. Defaults to 0.5.
+
+    Returns:
+        _type_: _description_
+    """
+    stim_right = random.random()
+    if stim_right < p_stim_right:
+        stim = torch.tensor([1,1,0], dtype=torch.float32)
+        correct_choice = 1
+    else:
+        stim = torch.tensor([1,0,1], dtype=torch.float32)
+        correct_choice = 0
+    return stim, correct_choice
+
+def get_auditory_stimulus(trial_type, task_id=0, thetas=[0,90], p_stim_right=0.5, num_notes=7):
     """This function returns the stimulus / input to the network for a given trial
 
     Args:
@@ -102,12 +121,12 @@ def get_stimulus(trial_type, task_id=0, thetas=[0,90], p_stim_right=0.5, num_not
             correct_choice = 0
     return stim, curr_theta, correct_choice
 
-def select_action(q_values, beta=1.0):
+def select_action(q_values, beta=0):
     """This function implements softmax action selection.
 
     Args:
         q_values (_type_): Action values.
-        beta (float, optional): Inverse temperature parameter. Defaults to 1.0.
+        beta (float, optional): Inverse temperature parameter. Defaults to 1000.0.
 
     Returns:
         action (int): Chosen action. Either 0 (left choice) or 1 (right choice).
@@ -116,9 +135,33 @@ def select_action(q_values, beta=1.0):
     exponent = np.exp(beta * q_values)
     probabilities = exponent / np.sum(exponent)
     action = np.random.choice(range(len(q_values)), p=probabilities)
-    return action, probabilities
+    return action, probabilities, beta
 
-def get_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward=0.5):
+def get_general_reward(trial_type, action, correct_choice, p_reward=0.5):
+    """_summary_
+
+    Args:
+        trial_type (_type_): _description_
+        action (_type_): _description_
+        correct_choice (_type_): _description_
+        p_reward (float, optional): _description_. Defaults to 0.5.
+
+    Returns:
+        _type_: _description_
+    """
+    if trial_type == "train":
+        if action == correct_choice:
+            return 1
+        else:
+            return 0
+    else:
+        reward = random.random()
+        if reward < p_reward:
+            return 1
+        else:
+            return 0
+
+def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward=0.5):
     """This function determines the reward delivered on a given trial.
 
     Args:
@@ -153,7 +196,7 @@ def get_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_rewar
         else:
             return 0
 
-def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_experiment(task_id=0, thetas=[0,90], spectrogram=True, num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals.
 
     Args:
@@ -169,12 +212,15 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
-    model = AuditoryDiscriminationNetwork(rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
+    if spectrogram:
+        model = DeepAuditoryDiscriminationNetwork(rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
+    else:
+        model = DeepAuditoryDiscriminationNetwork(rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, num_notes=2)
     data = []
 
     # In the supervised version of the model, the output of the network reflects the probabilities of choosing left or right,
     # which is then directly compared to the correct probabilities, either [1,0] for the left choice or [0,1] for the right choice.
-    if ~rpe:
+    if not model.rpe:
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
         criterion = nn.MSELoss()
 
@@ -184,7 +230,10 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
 
             # Choose a stimulus, keeping track of the current theta on the ring and the correct choice given an optimal
             # linear decision boundary
-            curr_stimulus, curr_theta, correct_choice = get_stimulus(trial_type, task_id, thetas)
+            if spectrogram:
+                curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
+            else:
+                curr_stimulus, correct_choice = get_general_stimulus()
 
             # Assign the correct probabilities for each action
             if correct_choice == 0:
@@ -194,6 +243,9 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
             
             # The output of the network are the probabilities of choosing left or right.
             action_probabilities = model(curr_stimulus)
+
+            # To track the accuracy of the model, select an action based on those probabilities
+            action, _, beta = select_action(action_probabilities.clone().detach().numpy().copy())
             
             loss = criterion(action_probabilities, target_action_probabilities)
             optimizer.zero_grad()
@@ -201,15 +253,27 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
             optimizer.step()
 
             if save_data:
-                trial_data = {
-                    "model": model,
-                    "loss": loss.item(),
-                    "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
-                    "curr_theta": curr_theta,
-                    "correct_choice": correct_choice,
-                    "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
-                }
+                if spectrogram:
+                    trial_data = {
+                        "model": model,
+                        "loss": loss.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_theta": curr_theta,
+                        "correct_choice": correct_choice,
+                        "action": action,
+                        "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    }
+                else:
+                    trial_data = {
+                        "model": model,
+                        "loss": loss.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "correct_choice": correct_choice,
+                        "action": action,
+                        "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    }
                 data.append(trial_data)
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
@@ -217,9 +281,9 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
     # In the reinforcement version of the model, the output of the network reflects the Q-values associated with choosing left of right,
     # which are updated based on the RPE.
     else:
-        if rpe_type == "full":
+        if model.rpe_type == "full":
             optimizer = optim.SGD(model.parameters(), lr=learning_rate)
-        elif rpe_type == "partial":
+        elif model.rpe_type == "partial":
             optimizer = optim.SGD([
                 {'params': model.l1_weights},
                 {'params': model.l2_weights_const},
@@ -233,7 +297,10 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
 
             # Choose a stimulus, keeping track of the current theta on the ring and the correct choice given an optimal
             # linear decision boundary
-            curr_stimulus, curr_theta, correct_choice = get_stimulus(trial_type, task_id, thetas)
+            if spectrogram:
+                curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
+            else:
+                curr_stimulus, correct_choice = get_general_stimulus()
             
             # The output of the network are the Q-values associated with choosing
             # left or right.
@@ -241,13 +308,16 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
             curr_q_values = q_values.clone().detach().numpy().copy()
             
             # Then select an action through a softmax function.
-            action, action_probabilities = select_action(curr_q_values)
+            action, action_probabilities, beta = select_action(curr_q_values)
             
             # Then determine if the choice is rewarded
-            reward = get_reward(trial_type, curr_theta, action, task_id, thetas)
+            if spectrogram:
+                reward = get_auditory_reward(trial_type, curr_theta, action, task_id, thetas)
+            else:
+                reward = get_general_reward(trial_type, action, correct_choice)
             
             # If we're using the full RPE, we update all the weights based on the same loss function
-            if rpe_type == "full":
+            if model.rpe_type == "full":
                 # Update the relevant Q-value based on the RPE
                 target_q_values = curr_q_values.copy()
                 target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
@@ -260,25 +330,39 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
                 optimizer.step()
 
                 if save_data:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "reward": reward
-                    }
+                    if spectrogram:
+                        trial_data = {
+                            "model": model,
+                            "loss": loss.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "curr_theta": curr_theta,
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward
+                        }
+                    else:
+                        trial_data = {
+                            "model": model,
+                            "loss": loss.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward,
+                            "beta": beta
+                        }
                     data.append(trial_data)
                     with open(save_path, 'wb') as pickle_file:
                         pickle.dump(data, pickle_file)
             
             # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
             # different loss functions
-            elif rpe_type == "partial":
+            elif model.rpe_type == "partial":
                 old_w1 = model.l1_weights.clone().detach().numpy().copy()
                 old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
                 old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
@@ -393,20 +477,35 @@ def run_experiment(task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trial
                 assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-03), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
 
                 if save_data:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1": loss_l1.item(),
-                        "loss_l2_const": loss_l2_const.item(),
-                        "loss_l2_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "reward": reward
-                    }
+                    if spectrogram:
+                        trial_data = {
+                            "model": model,
+                            "loss_l1": loss_l1.item(),
+                            "loss_l2_const": loss_l2_const.item(),
+                            "loss_l2_stim": loss_l2_stim.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "curr_theta": curr_theta,
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward
+                        }
+                    else:
+                        trial_data = {
+                            "model": model,
+                            "loss_l1": loss_l1.item(),
+                            "loss_l2_const": loss_l2_const.item(),
+                            "loss_l2_stim": loss_l2_stim.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward
+                        }
                     data.append(trial_data)
                     with open(save_path, 'wb') as pickle_file:
                         pickle.dump(data, pickle_file)
