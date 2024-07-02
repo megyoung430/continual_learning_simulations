@@ -4,10 +4,11 @@ import pickle
 import matplotlib.pyplot as plt
 from ..simulations.analysis_fxns import calculate_accuracy_over_training, get_loss_over_training
 
-def plot_summary_figure(data_path):
+def plot_summary_figure(data_path, save_path):
     """_summary_
 
     Args:
+        data_path (_type_): _description_
         data_path (_type_): _description_
     """
 

@@ -211,7 +211,7 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
         else:
             return 0
 
-def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via reinforcement learning.
 
     Args:
@@ -225,7 +225,6 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
         learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
         beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
         rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
-        tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
@@ -234,7 +233,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
     if not spectrogram:
         num_notes = 2
     
-    model = DeepRLAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
+    model = ShallowRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, num_notes=num_notes)
     
     # If saving the data, start by saving the initialized model
     if save_data:
@@ -466,7 +465,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
     if not spectrogram:
         num_notes = 2
     
-    model = DeepRLAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
+    model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
     
     # If saving the data, start by saving the initialized model
     if save_data:
@@ -710,7 +709,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
 
-def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, tonotopy=False, save_data=True, save_path=None):
+def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via supervised learning.
 
     Args:
@@ -723,7 +722,6 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
         learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
         beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
-        tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
@@ -924,7 +922,7 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
         else:
             run_shallow_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
                                    p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
-                                   tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+                                   save_data=save_data, save_path=save_path)
     else:
         if depth:
             run_deep_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
@@ -933,4 +931,4 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
         else:
             run_shallow_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
                                    p_train=p_train, num_trials=num_trials, learning_rate=learning_rate,
-                                   tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+                                   save_data=save_data, save_path=save_path)
