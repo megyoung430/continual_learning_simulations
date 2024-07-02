@@ -117,33 +117,33 @@ class DeepSupervisedAuditoryDiscriminationNetwork(nn.Module):
         l2_output = self.l2_weights(l1_output)
         return l2_output
 
-
 class ShallowRLAuditoryDiscriminationNetwork(nn.Module):
-    """This class specifies a shallow linear network to be trained on our auditory discrimination task."""
-    def __init__(self, rpe=True, rpe_type="full", num_notes=7, num_actions=2):
+    """This class specifies a shallow linear network to be trained on our auditory discrimination task via reinforcement learning."""
+    def __init__(self, rpe_type="full", num_notes=7, num_actions=2):
         """This function initializes one of the networks.
 
-        This class is set up to instantiate three different types of networks for comparison:
-        1) An 
-        2) 
-        3) 
+        This class is set up to instantiate a network with all-to-all connectivity between the input layer and the output layer.
+        The network can be trained with the full, global RPE signal or with partial RPE signals that determine independently the weight updates
+        for the stimulus terms and the constant term, inspired by Liebana-Garcia et al, 2023 and motivated in our case by Znamenskiy and Zador, 2012.
 
         Args:
-            rpe (bool, optional): If true, then the network learns via reinforcement learning; if false, the network learns via supervised learning. Defaults to True.
             rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
             num_notes (int, optional): Size of the input layer (excluding a constant bias term), here reflecting the spectrogram of the input. Defaults to 7.
             num_actions (int, optional): Size of the output layer, here reflecting the Q-values for left and right choices. Defaults to 2.
         """
         super().__init__()
-        self.rpe = rpe
-        if rpe and rpe_type=="partial":
+        self.rpe_type = rpe_type
+        if rpe_type=="partial":
             self.l1_weights_const = nn.Parameter(torch.ones(num_actions, 1))
             self.l1_weights_stim = nn.Parameter(torch.ones(num_actions, num_notes))
+            nn.init.uniform_(self.l1_weights_const, a=0.0, b=0.01)
+            nn.init.uniform_(self.l1_weights_stim, a=0.0, b=0.01)
         else:
             self.l1_weights = nn.Linear(num_notes + 1, num_actions, bias=False)
+            nn.init.uniform_(self.l1_weights.weight, a=0.0, b=0.01)
 
     def forward(self, input):
-        """This function implements a forward pass through the network
+        """This function implements a forward pass through the network.
 
         Args:
             input (num_notes + 1 tensor): Input to the network, representing the spectrogram of the auditory stimulus + a constant bias term.
@@ -151,9 +151,37 @@ class ShallowRLAuditoryDiscriminationNetwork(nn.Module):
         Returns:
             l1_output (num_actions tensor): Output of the network, reflecting the probabilities of choosing left and right, respectively.
         """
-        if self.rpe and self.rpe_type == "partial":
+        if self.rpe_type == "partial":
             l1_weights = torch.cat((self.l1_weights_const, self.l1_weights_stim), dim=1)
             l1_output = torch.matmul(input, l1_weights.T)
         else:
             l1_output = self.l1_weights(input)
+        return l1_output
+
+class ShallowSupervisedAuditoryDiscriminationNetwork(nn.Module):
+    """This class specifies a shallow linear network to be trained on our auditory discrimination task via supervised learning."""
+    def __init__(self, num_notes=7, num_actions=2):
+        """This function initializes one of the networks.
+
+        This class is set up to instantiate a network with all-to-all connectivity between the input layer and the output layer and trained
+        via supervised learning.
+
+        Args:
+            num_notes (int, optional): Size of the input layer (excluding a constant bias term), here reflecting the spectrogram of the input. Defaults to 7.
+            num_actions (int, optional): Size of the output layer, here reflecting the Q-values for left and right choices. Defaults to 2.
+        """
+        super().__init__()
+        self.l1_weights = nn.Linear(num_notes + 1, num_actions, bias=False)
+        nn.init.uniform_(self.l1_weights.weight, a=0.0, b=0.01)
+
+    def forward(self, input):
+        """This function implements a forward pass through the network.
+
+        Args:
+            input (num_notes + 1 tensor): Input to the network, representing the spectrogram of the auditory stimulus + a constant bias term.
+
+        Returns:
+            l1_output (num_actions tensor): Output of the network, reflecting the probabilities of choosing left and right, respectively.
+        """
+        l1_output = self.l1_weights(input)
         return l1_output

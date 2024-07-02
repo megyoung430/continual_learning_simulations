@@ -1,1 +1,1 @@
-from .networks import (DeepAuditoryDiscriminationNetwork, ShallowAuditoryDiscriminationNetwork)
+from .networks import (DeepRLAuditoryDiscriminationNetwork, DeepSupervisedAuditoryDiscriminationNetwork, ShallowRLAuditoryDiscriminationNetwork, ShallowSupervisedAuditoryDiscriminationNetwork)

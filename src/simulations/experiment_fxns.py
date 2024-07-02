@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
-from ..models.networks import DeepAuditoryDiscriminationNetwork
+from ..models.networks import *
 
 def get_trial_type(p_train=0.8, p_test=0.5):
     """This function determines the type of the upcoming trial.
@@ -196,7 +196,7 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
         else:
             return 0
 
-def run_experiment(task_id=0, thetas=[0,90], spectrogram=True, num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, depth=True, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals.
 
     Args:
@@ -212,10 +212,21 @@ def run_experiment(task_id=0, thetas=[0,90], spectrogram=True, num_notes=7, p_tr
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
-    if spectrogram:
-        model = DeepAuditoryDiscriminationNetwork(rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
+    # If training on the basic task (input indicates just the presence of the left or right stimulus), then the input dimension
+    # (parametrized in the networks as as num_notes) is 2.
+    if not spectrogram:
+        num_stimuli = 2
+    
+    if depth:
+        if rpe:
+            model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_stimuli)
+        else:
+            model = DeepSupervisedAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
     else:
-        model = DeepAuditoryDiscriminationNetwork(rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, num_notes=2)
+        if rpe:
+            model = ShallowRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, num_notes=num_notes)
+        else:
+            model = ShallowSupervisedAuditoryDiscriminationNetwork(num_notes=num_notes)
     data = []
 
     # In the supervised version of the model, the output of the network reflects the probabilities of choosing left or right,
