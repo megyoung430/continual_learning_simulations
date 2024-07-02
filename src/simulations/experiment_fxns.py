@@ -121,12 +121,12 @@ def get_auditory_stimulus(trial_type, task_id=0, thetas=[0,90], p_stim_right=0.5
             correct_choice = 0
     return stim, curr_theta, correct_choice
 
-def select_action(q_values, beta=0):
+def select_action(q_values, beta=2.5):
     """This function implements softmax action selection.
 
     Args:
         q_values (_type_): Action values.
-        beta (float, optional): Inverse temperature parameter. Defaults to 1000.0.
+        beta (float, optional): Inverse temperature parameter. Defaults to 2.5.
 
     Returns:
         action (int): Chosen action. Either 0 (left choice) or 1 (right choice).
@@ -215,11 +215,11 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
     # If training on the basic task (input indicates just the presence of the left or right stimulus), then the input dimension
     # (parametrized in the networks as as num_notes) is 2.
     if not spectrogram:
-        num_stimuli = 2
+        num_notes = 2
     
     if depth:
         if rpe:
-            model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_stimuli)
+            model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
         else:
             model = DeepSupervisedAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
     else:
@@ -294,11 +294,16 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
     else:
         if model.rpe_type == "full":
             optimizer = optim.SGD(model.parameters(), lr=learning_rate)
-        elif model.rpe_type == "partial":
+        elif depth and model.rpe_type == "partial":
             optimizer = optim.SGD([
                 {'params': model.l1_weights},
                 {'params': model.l2_weights_const},
                 {'params': model.l2_weights_stim}
+            ], lr=learning_rate)
+        elif not depth and model.rpe_type == "partial":
+            optimizer = optim.SGD([
+                {'params': model.l1_weights_const},
+                {'params': model.l1_weights_stim}
             ], lr=learning_rate)
         criterion = nn.MSELoss()
         
@@ -373,7 +378,7 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
             
             # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
             # different loss functions
-            elif model.rpe_type == "partial":
+            elif depth and model.rpe_type == "partial":
                 old_w1 = model.l1_weights.clone().detach().numpy().copy()
                 old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
                 old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
@@ -509,6 +514,120 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
                             "loss_l1": loss_l1.item(),
                             "loss_l2_const": loss_l2_const.item(),
                             "loss_l2_stim": loss_l2_stim.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward
+                        }
+                    data.append(trial_data)
+                    with open(save_path, 'wb') as pickle_file:
+                        pickle.dump(data, pickle_file)
+            
+            elif not depth and model.rpe_type == "partial":
+                old_w1_const = model.l1_weights_const.clone().detach().numpy().copy()
+                old_w1_stim = model.l1_weights_stim.clone().detach().numpy().copy()
+
+                w1_const = model.l1_weights_const.clone().detach().numpy()
+                w1_stim = model.l1_weights_stim.clone().detach().numpy()
+                w1 = np.concatenate((w1_const, w1_stim), axis=1)
+
+                # Compute the Q-values using only the const term
+                const_term_input = curr_stimulus.clone()
+                const_term_input[1:] = 0  # Zero out stimulus terms
+                const_q_values = model(const_term_input)
+                expected_const_q_values = w1[0]
+                assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
+
+                # Compute the Q-values using only the stim term
+                stim_term_input = curr_stimulus.clone()
+                stim_term_input[0] = 0  # Zero out the constant term
+                stim_q_values = model(stim_term_input)
+                expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
+                for i in range(1, num_notes + 1):
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w1[i]
+                assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
+
+                # Calculate the loss for W1_const
+                curr_const_q_values = const_q_values.clone().detach().numpy().copy()
+                const_corticostriatal_loss = reward - curr_const_q_values[action]
+                target_const_q_values = curr_const_q_values.copy()
+                target_const_q_values[action] = target_const_q_values[action] + const_corticostriatal_loss
+                target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
+
+                loss_l1_const = criterion(const_q_values, target_const_q_values)
+                expected_loss_l1_const = 0.5 * (reward - curr_const_q_values[action]) ** 2
+                assert np.isclose(loss_l1_const.item(), expected_loss_l1_const, atol=1e-03), f"Expected: {expected_loss_l1_const}, Got: {loss_l1_const.item()}"
+
+                # Update W1_const
+                optimizer.zero_grad()
+                model.l1_weights_const.requires_grad = True
+                model.l1_weights_stim.requires_grad = False
+                loss_l1_const.backward(retain_graph=True)
+                optimizer.step()
+
+                # Calculate the loss for W1_stim
+                curr_stim_q_values = stim_q_values.clone().detach().numpy().copy()
+                stim_corticostriatal_loss = reward - curr_stim_q_values[action]
+                target_stim_q_values = curr_stim_q_values.copy()
+                target_stim_q_values[action] = target_stim_q_values[action] + stim_corticostriatal_loss
+                target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
+
+                loss_l1_stim = criterion(stim_q_values, target_stim_q_values)
+                expected_loss_l1_stim = 0.5 * (reward - curr_stim_q_values[action]) ** 2
+                assert np.isclose(loss_l1_stim.item(), expected_loss_l1_stim, atol=1e-03), f"Expected: {expected_loss_l1_stim}, Got: {loss_l1_stim.item()}"
+
+                # Update W1_stim
+                optimizer.zero_grad()
+                model.l1_weights_const.requires_grad = False
+                model.l1_weights_stim.requires_grad = True
+                loss_l1_stim.backward()
+                optimizer.step()
+
+                # Need to unfreeze all the weights again
+                model.l1_weights_const.requires_grad = True
+                model.l1_weights_stim.requires_grad = True
+
+                new_w1_const = model.l1_weights_const.clone().detach().numpy().copy()
+                new_w1_stim = model.l1_weights_stim.clone().detach().numpy().copy()
+
+                delta_w1_const = new_w1_const - old_w1_const
+                delta_w1_stim = new_w1_stim - old_w1_stim
+
+                expected_delta_w1_const = np.zeros(shape=delta_w1_const.shape)
+                expected_delta_w1_stim = np.zeros(shape=delta_w1_stim.shape)
+
+                for i in range(1, num_notes + 1):
+                    expected_delta_w1_stim[action, i - 1] = curr_stimulus[i] * w1[i]
+
+                expected_delta_w1_const[action] = learning_rate * const_corticostriatal_loss * w1[0]
+                expected_delta_w1_stim = learning_rate * stim_corticostriatal_loss * expected_delta_w1_stim
+
+                assert np.allclose(delta_w1_const, expected_delta_w2_const, atol=1e-03), f"Expected: {expected_delta_w1_const}, Got: {delta_w1_const}"
+                assert np.allclose(delta_w1_stim, expected_delta_w2_stim, atol=1e-03), f"Expected: {expected_delta_w1_stim}, Got: {delta_w1_stim}"
+
+                if save_data:
+                    if spectrogram:
+                        trial_data = {
+                            "model": model,
+                            "loss_l1_const": loss_l1_const.item(),
+                            "loss_l1_stim": loss_l1_stim.item(),
+                            "trial_type": trial_type,
+                            "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                            "curr_theta": curr_theta,
+                            "correct_choice": correct_choice,
+                            "q_values": curr_q_values,
+                            "action": action,
+                            "action_probabilities": action_probabilities,
+                            "reward": reward
+                        }
+                    else:
+                        trial_data = {
+                            "model": model,
+                            "loss_l1_const": loss_l2_const.item(),
+                            "loss_l1_stim": loss_l2_stim.item(),
                             "trial_type": trial_type,
                             "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
                             "correct_choice": correct_choice,
