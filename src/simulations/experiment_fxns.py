@@ -247,8 +247,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     elif model.rpe_type == "partial":
         optimizer = optim.SGD([
-            {'params': model.l1_weights_const},
-            {'params': model.l1_weights_stim}
+            {'params': [model.l1_weights_const]},
+            {'params': [model.l1_weights_stim]}
         ], lr=learning_rate)
     criterion = nn.MSELoss()
     
@@ -479,9 +479,9 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     elif model.rpe_type == "partial":
         optimizer = optim.SGD([
-            {'params': model.l1_weights},
-            {'params': model.l2_weights_const},
-            {'params': model.l2_weights_stim}
+            {'params': [model.l1_weights] if model.tonotopy else model.l1_weights.parameters()},
+            {'params': [model.l2_weights_const]},
+            {'params': [model.l2_weights_stim]}
         ], lr=learning_rate)
     criterion = nn.MSELoss()
     
@@ -560,20 +560,34 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
         # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
         # different loss functions
         elif model.rpe_type == "partial":
-            old_w1 = model.l1_weights.clone().detach().numpy().copy()
-            old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-            old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+            
+            if tonotopy:
+                old_w1 = model.l1_weights.clone().detach().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
 
-            w1 = model.l1_weights.clone().detach().numpy()
-            w2_const = model.l2_weights_const.clone().detach().numpy()
-            w2_stim = model.l2_weights_stim.clone().detach().numpy()
-            w2 = np.concatenate((w2_const, w2_stim), axis=1)
+                w1 = model.l1_weights.clone().detach().numpy()
+                w2_const = model.l2_weights_const.clone().detach().numpy()
+                w2_stim = model.l2_weights_stim.clone().detach().numpy()
+                w2 = np.concatenate((w2_const, w2_stim), axis=1)
+            else:
+                old_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+
+                w1 = model.l1_weights.weight.clone().detach().numpy()
+                w2_const = model.l2_weights_const.clone().detach().numpy()
+                w2_stim = model.l2_weights_stim.clone().detach().numpy()
+                w2 = np.concatenate((w2_const, w2_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
             const_q_values = model(const_term_input)
-            expected_const_q_values = w1[0] * w2[:, 0]
+            if tonotopy:
+                expected_const_q_values = w2[:,0] * w1[0]
+            else:
+                expected_const_q_values = w2[:,0] * w1[:,0]
             assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
 
             # Compute the Q-values using only the stim term
@@ -582,7 +596,10 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             stim_q_values = model(stim_term_input)
             expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
             for i in range(1, num_notes + 1):
-                expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w1[i] * w2[:,i]
+                if tonotopy:
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2[:,i] * w1[i] 
+                else:
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2[:,i] * w1[:,i] 
             assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
 
             # Calculate the loss for W1
@@ -646,9 +663,14 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             model.l2_weights_const.requires_grad = True
             model.l2_weights_stim.requires_grad = True
 
-            new_w1 = model.l1_weights.clone().detach().numpy().copy()
-            new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-            new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+            if tonotopy:
+                new_w1 = model.l1_weights.clone().detach().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+            else:
+                new_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
 
             delta_w1 = new_w1 - old_w1
             delta_w2_const = new_w2_const - old_w2_const
@@ -833,7 +855,13 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], n
         with open(save_path, 'wb') as pickle_file:
             pickle.dump(data, pickle_file)
 
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    if tonotopy:
+        optimizer = optim.SGD([
+                {'params': [model.l1_weights]},
+                {'params': model.l2_weights.parameters()},
+            ], lr=learning_rate)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
     
     # In the supervised version of the model, the output of the network reflects the probabilities of choosing left or right,
