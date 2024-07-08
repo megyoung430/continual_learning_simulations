@@ -3,6 +3,7 @@
 import pickle
 import matplotlib.pyplot as plt
 from ..simulations.analysis_fxns import calculate_accuracy_over_training, get_loss_over_training
+from ..models.networks import *
 
 def plot_summary_figure(data_path, save_path):
     """_summary_
@@ -17,7 +18,7 @@ def plot_summary_figure(data_path, save_path):
     curr_model = data[0]["model"]
 
     fig, axs = plt.subplots(1, 2)
-    if curr_model.rpe and curr_model.rpe_type == "partial":
+    if type(curr_model) is DeepRLAuditoryDiscriminationNetwork and curr_model.rpe_type == "partial":
         accuracy_over_training, running_accuracy_over_training = calculate_accuracy_over_training(data_path)
         loss_l1_over_training, loss_l2_const_over_training, loss_l2_stim_over_training = get_loss_over_training(data_path)
         

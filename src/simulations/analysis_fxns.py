@@ -3,6 +3,7 @@ their learning trajectories."""
 
 import pickle
 import numpy as np
+from ..models.networks import *
 
 def calculate_accuracy_over_training(data_path, window=100):
     """This function calculates the accuracy of the model over the course of training.
@@ -17,10 +18,10 @@ def calculate_accuracy_over_training(data_path, window=100):
     with open(data_path, 'rb') as file:
         data = pickle.load(file)
 
-    num_trials = len(data)
+    num_trials = len(data) - 1
     correct_choice_history = []
     running_accuracy_over_training = []
-    for i in range(num_trials):
+    for i in range(1, num_trials + 1):
         curr_trial_info = data[i]
         correct_choice_history.append(curr_trial_info["action"] == curr_trial_info["correct_choice"])
         if i > window:
@@ -41,12 +42,12 @@ def get_loss_over_training(data_path):
     with open(data_path, 'rb') as file:
         data = pickle.load(file)
 
-    num_trials = len(data)
+    num_trials = len(data) - 1
     curr_model = data[0]["model"]
-    if curr_model.rpe and curr_model.rpe_type == "partial":
-        loss_l1_over_training = [data[i]["loss_l1"] for i in range(num_trials)]
-        loss_l2_const_over_training = [data[i]["loss_l2_const"] for i in range(num_trials)]
-        loss_l2_stim_over_training = [data[i]["loss_l2_stim"] for i in range(num_trials)]
+    if type(curr_model) is DeepRLAuditoryDiscriminationNetwork and curr_model.rpe_type == "partial":
+        loss_l1_over_training = [data[i]["loss_l1"] for i in range(1, num_trials + 1)]
+        loss_l2_const_over_training = [data[i]["loss_l2_const"] for i in range(1, num_trials + 1)]
+        loss_l2_stim_over_training = [data[i]["loss_l2_stim"] for i in range(1, num_trials + 1)]
         return loss_l1_over_training, loss_l2_const_over_training, loss_l2_stim_over_training
     else:
         loss_over_training = [data[i]["loss"] for i in range(num_trials)]

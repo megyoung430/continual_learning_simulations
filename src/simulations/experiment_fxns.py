@@ -152,31 +152,36 @@ def select_action(q_values, beta=2.5):
     action = np.random.choice(range(len(q_values)), p=probabilities)
     return action, probabilities
 
-def get_general_reward(trial_type, action, correct_choice, p_reward=0.5):
+def get_general_reward(trial_type, action, correct_choice, p_reward_train=1, p_reward_test_validation=0.5):
     """This function determines the reward delivered on a given trial in the general version of the task.
 
     Args:
         trial_type (string): The type of the current trial. Either train, test, or validation.
         action (int): Action the agent chose. Either 0 (left choice) or 1 (right choice)
         correct_choice (int): Correct action associated with the stimulus. Either 0 (left choice) or 1 (right choice).
-        p_reward (float, optional): Probability that the current trial is rewared for validation and test trials. Defaults to 0.5.
+        p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
+        p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
 
     Returns:
         int: Indicates presence or absence of reward.
     """
     if trial_type == "train":
         if action == correct_choice:
-            return 1
+            reward = random.random()
+            if reward < p_reward_train:
+                return 1
+            else:
+                return 0
         else:
             return 0
     else:
         reward = random.random()
-        if reward < p_reward:
+        if reward < p_reward_test_validation:
             return 1
         else:
             return 0
 
-def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward=0.5):
+def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward_train=1, p_reward_test_validation=0.5, ):
     """This function determines the reward delivered on a given trial in the auditory version of the task.
 
     Args:
@@ -186,7 +191,8 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2).
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
-        p_reward (float, optional): Probability that the current trial is rewared for validation and test trials. Defaults to 0.5.
+        p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
+        p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
 
     Returns:
         int: Indicates presence or absence of reward.
@@ -195,23 +201,32 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
         # If the current angle is the first sound of the task, then reward the right choice
         if curr_theta == thetas[task_id]:
             if action == 1:
-                return 1
+                reward = random.random()
+                if reward < p_reward_train:
+                    return 1
+                else:
+                    return 0
             else:
                 return 0
         # Otherwise, reward left choice
         else:
             if action == 0:
-                return 1
+                reward = random.random()
+                if reward < p_reward_train:
+                    return 1
+                else:
+                    return 0
             else:
                 return 0
     else:
         reward = random.random()
-        if reward < p_reward:
+        if reward < p_reward_test_validation:
             return 1
         else:
             return 0
 
-def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", save_data=True, save_path=None):
+def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+                                num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via reinforcement learning.
 
     Args:
@@ -442,7 +457,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
 
-def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
+                            num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a deep network trained via reinforcement learning.
 
     Args:
@@ -452,6 +468,8 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
+        p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
+        p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
         learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
         beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
@@ -508,9 +526,9 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
         
         # Then determine if the choice is rewarded
         if spectrogram:
-            reward = get_auditory_reward(trial_type, curr_theta, action, task_id, thetas)
+            reward = get_auditory_reward(trial_type, curr_theta, action, task_id, thetas, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation)
         else:
-            reward = get_general_reward(trial_type, action, correct_choice)
+            reward = get_general_reward(trial_type, action, correct_choice, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation)
         
         # If we're using the full RPE, we update all the weights based on the same loss function
         if model.rpe_type == "full":
@@ -585,9 +603,9 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             const_term_input[1:] = 0  # Zero out stimulus terms
             const_q_values = model(const_term_input)
             if tonotopy:
-                expected_const_q_values = w2[:,0] * w1[0]
+                expected_const_q_values = w1[0] * w2[:,0]
             else:
-                expected_const_q_values = w2[:,0] * w1[:,0]
+                expected_const_q_values = w2 @ w1[:,0]
             assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
 
             # Compute the Q-values using only the stim term
@@ -597,9 +615,9 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
             for i in range(1, num_notes + 1):
                 if tonotopy:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2[:,i] * w1[i] 
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w1[i] * w2[:,i]
                 else:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2[:,i] * w1[:,i] 
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2 @ w1[:,i]
             assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
 
             # Calculate the loss for W1
@@ -731,7 +749,8 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
 
-def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, save_data=True, save_path=None):
+def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+                                        num_trials=10000, learning_rate=0.1, beta=2.5, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via supervised learning.
 
     Args:
@@ -823,7 +842,8 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
             with open(save_path, 'wb') as pickle_file:
                 pickle.dump(data, pickle_file)
 
-def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, tonotopy=False, save_data=True, save_path=None):
+def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+                                    num_trials=10000, learning_rate=0.1, beta=2.5, tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a deep network trained via supervised learning.
 
     Args:
@@ -922,7 +942,8 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], n
             with open(save_path, 'wb') as pickle_file:
                 pickle.dump(data, pickle_file)
 
-def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
+                    num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals.
 
     Args:
@@ -932,6 +953,8 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
+        p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
+        p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
         learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
         beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
@@ -945,7 +968,8 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
     if rpe:
         if depth:
             run_deep_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
-                                   p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
+                                   p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
+                                   num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
                                    tonotopy=tonotopy, save_data=save_data, save_path=save_path)
         else:
             run_shallow_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
