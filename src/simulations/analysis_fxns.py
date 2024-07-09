@@ -2,11 +2,18 @@
 their learning trajectories."""
 
 import pickle
+import glob
+from pathlib import Path
 import numpy as np
 from ..models.networks import *
 
-def calculate_accuracy_over_training(data_path, window=100):
-    """This function calculates the accuracy of the model over the course of training.
+def get_all_models(data_directory, model_name):
+
+    pattern = f"*{model_name}*.pk1"
+    return list(data_directory.glob(pattern))
+
+def calculate_train_accuracy_over_training(data_path, window=100):
+    """This function calculates the accuracy of the model on train trials over the course of training.
 
     Args:
         data_path (Path object): Path to the data.
@@ -20,14 +27,110 @@ def calculate_accuracy_over_training(data_path, window=100):
 
     num_trials = len(data) - 1
     correct_choice_history = []
-    running_accuracy_over_training = []
+    running_train_accuracy_over_training = []
     for i in range(1, num_trials + 1):
         curr_trial_info = data[i]
-        correct_choice_history.append(curr_trial_info["action"] == curr_trial_info["correct_choice"])
-        if i > window:
-            running_accuracy_over_training.append(np.sum(correct_choice_history[-window:])/window)
-    accuracy_over_training = np.cumsum(correct_choice_history)/np.arange(1, num_trials + 1, 1)
-    return accuracy_over_training, running_accuracy_over_training
+        if curr_trial_info["trial_type"] == "train":
+            correct_choice_history.append(curr_trial_info["action"] == curr_trial_info["correct_choice"])
+            if i > window:
+                running_train_accuracy_over_training.append(np.sum(correct_choice_history[-window:])/window)
+    train_accuracy_over_training = np.cumsum(correct_choice_history)/np.arange(1, len(correct_choice_history) + 1, 1)
+    return train_accuracy_over_training, running_train_accuracy_over_training
+
+def pad_arrays(arrays, pad_value=np.nan):
+    """Pads arrays to the same length with the specified pad value.
+
+    Args:
+        arrays (_type_): _description_
+        pad_value (_type_, optional): _description_. Defaults to np.nan.
+
+    Returns:
+        _type_: _description_
+    """
+    max_length = max(len(arr) for arr in arrays)
+    padded_arrays = [np.pad(arr, (0, max_length - len(arr)), constant_values=pad_value) for arr in arrays]
+    return np.array(padded_arrays)
+
+def calculate_train_accuracy_over_training_across_models(data_paths, window=100):
+    """_summary_
+
+    Args:
+        data_paths (_type_): _description_
+        window (int, optional): _description_. Defaults to 100.
+
+    Returns:
+        _type_: _description_
+    """
+    train_accuracies_over_training = []
+    running_train_accuracies_over_training = []
+    for data_path in data_paths:
+        train_accuracy_over_training, running_train_accuracy_over_training = calculate_train_accuracy_over_training(data_path, window=window)
+        train_accuracies_over_training.append(train_accuracy_over_training)
+        running_train_accuracies_over_training.append(running_train_accuracy_over_training)
+    
+    padded_train_accuracies = pad_arrays(train_accuracies_over_training)
+    padded_running_train_accuracies = pad_arrays(running_train_accuracies_over_training)
+    
+    mean_train_accuracies_over_training = np.nanmean(padded_train_accuracies, axis=0)
+    std_train_accuracies_over_training = np.nanstd(padded_train_accuracies, axis=0)
+    mean_running_train_accuracies_over_training = np.nanmean(padded_running_train_accuracies, axis=0)
+    std_running_train_accuracies_over_training = np.nanstd(padded_running_train_accuracies, axis=0)
+    
+    return (train_accuracies_over_training, mean_train_accuracies_over_training, std_train_accuracies_over_training,
+            running_train_accuracies_over_training, mean_running_train_accuracies_over_training, std_running_train_accuracies_over_training)
+
+def calculate_validation_accuracy_over_training(data_path, window=100):
+    """This function calculates the accuracy of the model on train trials over the course of training.
+
+    Args:
+        data_path (Path object): Path to the data.
+
+    Returns:
+        accuracy_over_training (num_trials array): Running accuracy of the model after each trial.
+    """
+
+    with open(data_path, 'rb') as file:
+        data = pickle.load(file)
+
+    num_trials = len(data) - 1
+    correct_choice_history = []
+    running_validation_accuracy_over_training = []
+    for i in range(1, num_trials + 1):
+        curr_trial_info = data[i]
+        if curr_trial_info["trial_type"] == "validation":
+            correct_choice_history.append(curr_trial_info["action"] == curr_trial_info["correct_choice"])
+            if i > window:
+                running_validation_accuracy_over_training.append(np.sum(correct_choice_history[-window:])/window)
+    validation_accuracy_over_training = np.cumsum(correct_choice_history)/np.arange(1, len(correct_choice_history) + 1, 1)
+    return validation_accuracy_over_training, running_validation_accuracy_over_training
+
+def calculate_validation_accuracy_over_training_across_models(data_paths, window=100):
+    """_summary_
+
+    Args:
+        data_paths (_type_): _description_
+        window (int, optional): _description_. Defaults to 100.
+
+    Returns:
+        _type_: _description_
+    """
+    validation_accuracies_over_training = []
+    running_validation_accuracies_over_training = []
+    for data_path in data_paths:
+        validation_accuracy_over_training, running_validation_accuracy_over_training = calculate_validation_accuracy_over_training(data_path, window=window)
+        validation_accuracies_over_training.append(validation_accuracy_over_training)
+        running_validation_accuracies_over_training.append(running_validation_accuracy_over_training)
+    
+    padded_validation_accuracies = pad_arrays(validation_accuracies_over_training)
+    padded_running_validation_accuracies = pad_arrays(running_validation_accuracies_over_training)
+    
+    mean_validation_accuracies_over_training = np.nanmean(padded_validation_accuracies, axis=0)
+    std_validation_accuracies_over_training = np.nanstd(padded_validation_accuracies, axis=0)
+    mean_running_validation_accuracies_over_training = np.nanmean(padded_running_validation_accuracies, axis=0)
+    std_running_validation_accuracies_over_training = np.nanstd(padded_running_validation_accuracies, axis=0)
+    
+    return (validation_accuracies_over_training, mean_validation_accuracies_over_training, std_validation_accuracies_over_training,
+            running_validation_accuracies_over_training, mean_running_validation_accuracies_over_training, std_running_validation_accuracies_over_training)
 
 def get_loss_over_training(data_path):
     """_summary_

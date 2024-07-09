@@ -2,7 +2,7 @@
 
 import pickle
 import matplotlib.pyplot as plt
-from ..simulations.analysis_fxns import calculate_accuracy_over_training, get_loss_over_training
+from ..simulations.analysis_fxns import *
 from ..models.networks import *
 
 def plot_summary_figure(data_path, save_path):
@@ -40,4 +40,64 @@ def plot_summary_figure(data_path, save_path):
     axs[1].set_ylabel("Loss")
     axs[1].set_xlabel("Number of Trials")
 
+    plt.show()
+
+def plot_train_accuracy_comparison_across_models(model_names, data_paths_across_models, with_window=False):
+
+    num_models = len(model_names)
+    fig, axs = plt.subplots(1, num_models)
+    for i in range(num_models):
+        
+        curr_model = model_names[i]
+        data_paths = data_paths_across_models[curr_model]
+
+        if with_window:
+            _, _, _, _, mean, std = calculate_train_accuracy_over_training_across_models(data_paths)
+            y_label = "Accuracy over Last 100 Trials"
+        else:
+            _, mean, std, _, _, _ = calculate_train_accuracy_over_training_across_models(data_paths)
+            y_label = "Accuracy"
+        
+        axs[i].plot(mean)
+        axs[i].fill_between(range(mean.shape[0]), mean - std, mean + std, alpha=0.2)
+        axs[i].set_ylabel(y_label)
+        axs[i].set_xlabel("Number of Trials")
+        axs[i].set_ylim([0,1])
+        axs[i].set_xlim([0, mean.shape[0]])
+        axs[i].set_title("Model: " + curr_model)
+        
+        axs[i].spines['top'].set_visible(False)
+        axs[i].spines['right'].set_visible(False) 
+    
+    fig.suptitle("Performance on Train Trials Across Models")
+    plt.show()
+
+def plot_validation_accuracy_comparison_across_models(model_names, data_paths_across_models, with_window=False):
+
+    num_models = len(model_names)
+    fig, axs = plt.subplots(1, num_models)
+    for i in range(num_models):
+        
+        curr_model = model_names[i]
+        data_paths = data_paths_across_models[curr_model]
+
+        if with_window:
+            _, _, _, _, mean, std = calculate_validation_accuracy_over_training_across_models(data_paths)
+            y_label = "Accuracy over Last 100 Trials"
+        else:
+            _, mean, std, _, _, _ = calculate_validation_accuracy_over_training_across_models(data_paths)
+            y_label = "Accuracy"
+        
+        axs[i].plot(mean)
+        axs[i].fill_between(range(mean.shape[0]), mean - std, mean + std, alpha=0.2)
+        axs[i].set_ylabel(y_label)
+        axs[i].set_xlabel("Number of Trials")
+        axs[i].set_ylim([0,1])
+        axs[i].set_xlim([0, mean.shape[0]])
+        axs[i].set_title("Model: " + curr_model)
+        
+        axs[i].spines['top'].set_visible(False)
+        axs[i].spines['right'].set_visible(False) 
+    
+    fig.suptitle("Performance on Validation Trials Across Models")
     plt.show()

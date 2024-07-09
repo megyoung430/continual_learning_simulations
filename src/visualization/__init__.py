@@ -1,1 +1,1 @@
-from .plotting_fxns import (plot_summary_figure)
+from .plotting_fxns import (plot_summary_figure, plot_train_accuracy_comparison_across_models, plot_validation_accuracy_comparison_across_models)
