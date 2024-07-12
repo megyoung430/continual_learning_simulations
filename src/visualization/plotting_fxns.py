@@ -52,10 +52,10 @@ def plot_train_accuracy_comparison_across_models(model_names, data_paths_across_
         data_paths = data_paths_across_models[curr_model]
 
         if with_window:
-            _, _, _, _, mean, std = calculate_train_accuracy_over_training_across_models(data_paths)
+            _, _, _, _, mean, std = calculate_train_accuracy_over_training_across_models(data_paths, trial_type="train")
             y_label = "Accuracy over Last 100 Trials"
         else:
-            _, mean, std, _, _, _ = calculate_train_accuracy_over_training_across_models(data_paths)
+            _, mean, std, _, _, _ = calculate_train_accuracy_over_training_across_models(data_paths, trial_type="train")
             y_label = "Accuracy"
         
         axs[i].plot(mean)
@@ -82,10 +82,10 @@ def plot_validation_accuracy_comparison_across_models(model_names, data_paths_ac
         data_paths = data_paths_across_models[curr_model]
 
         if with_window:
-            _, _, _, _, mean, std = calculate_validation_accuracy_over_training_across_models(data_paths)
+            _, _, _, _, mean, std = calculate_validation_accuracy_over_training_across_models(data_paths, trial_type="validation")
             y_label = "Accuracy over Last 100 Trials"
         else:
-            _, mean, std, _, _, _ = calculate_validation_accuracy_over_training_across_models(data_paths)
+            _, mean, std, _, _, _ = calculate_validation_accuracy_over_training_across_models(data_paths, trial_type="validation")
             y_label = "Accuracy"
         
         axs[i].plot(mean)

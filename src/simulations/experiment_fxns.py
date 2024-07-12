@@ -225,7 +225,7 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
         else:
             return 0
 
-def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, 
                                 num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via reinforcement learning.
 
@@ -234,6 +234,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
@@ -248,13 +249,29 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
     if not spectrogram:
         num_notes = 2
     
-    model = ShallowRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, num_notes=num_notes)
+    # If this is the first task, then initialize a new network
+    if task_id == 0:
+        model = ShallowRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, num_notes=num_notes)
+    # However, if this is one of the later tasks, load a previously trained network
+    else:
+        with open(model_path, 'rb') as file:
+            data = pickle.load(file)
+        model = data[-1]["model"]
+        # Check that the model is the correct type
+        assert(type(model) == ShallowRLAuditoryDiscriminationNetwork)
+        assert(model.rpe_type == rpe_type)
     
     # If saving the data, start by saving the initialized model
     if save_data:
-        data = [{
-            "model": model
-        }]
+        if task_id == 0:
+            data = [{
+                "model": model
+            }]
+        else:
+            data = [{
+                "model": model,
+                "model_path": model_path
+            }]
         with open(save_path, 'wb') as pickle_file:
             pickle.dump(data, pickle_file)
     
@@ -457,8 +474,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_no
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
 
-def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
-                            num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
+                                          num_trials=10000, learning_rate=0.1, beta=2.5, action_penalty= rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a deep network trained via reinforcement learning.
 
     Args:
@@ -466,6 +483,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
         p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
@@ -482,14 +500,372 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
     # (parametrized in the networks as as num_notes) is 2.
     if not spectrogram:
         num_notes = 2
-    
-    model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
+
+    # If this is the first task, then initialize a new network
+    if task_id == 0:
+        model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes, num_actions=3)
+    # However, if this is one of the later tasks, load a previously trained network
+    else:
+        with open(model_path, 'rb') as file:
+            data = pickle.load(file)
+        model = data[-1]["model"]
+        # Check that the model is the correct type
+        assert(type(model) == DeepRLAuditoryDiscriminationNetwork)
+        assert(model.rpe_type == rpe_type)
+        assert(model.tonotopy == tonotopy)
     
     # If saving the data, start by saving the initialized model
     if save_data:
-        data = [{
-            "model": model
-        }]
+        if task_id == 0:
+            data = [{
+                "model": model
+            }]
+        else:
+            data = [{
+                "model": model,
+                "model_path": model_path
+            }]
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
+    
+    if model.rpe_type == "full":
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    elif model.rpe_type == "partial":
+        optimizer = optim.SGD([
+            {'params': [model.l1_weights] if model.tonotopy else model.l1_weights.parameters()},
+            {'params': [model.l2_weights_const]},
+            {'params': [model.l2_weights_stim]}
+        ], lr=learning_rate)
+    criterion = nn.MSELoss()
+    
+    # In the reinforcement version of the model, the output of the network reflects the Q-values associated with choosing left of right,
+    # which are updated based on the RPE.
+    for i in range(num_trials):
+        # Determine the trial type, either train, test, or validation
+        trial_type = get_trial_type(p_train=p_train)
+
+        # Choose a stimulus, keeping track of the current theta on the ring and the correct choice given an optimal
+        # linear decision boundary
+        if spectrogram:
+            curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
+        else:
+            curr_stimulus, correct_choice = get_general_stimulus()
+        
+        # The output of the network are the Q-values associated with choosing
+        # left or right.
+        q_values = model(curr_stimulus)
+        curr_q_values = q_values.clone().detach().numpy().copy()
+        
+        # Then select an action through a softmax function.
+        action, action_probabilities = select_action(curr_q_values, beta=beta)
+        
+        # Then determine if the choice is rewarded
+        if spectrogram:
+            reward = get_auditory_reward(trial_type, curr_theta, action, task_id, thetas, 
+                                          p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
+                                          with_inaction=True, action_penalty=action_penalty)
+        else:
+            reward = get_general_reward(trial_type, action, correct_choice, 
+                                         p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
+                                         with_inaction=True, action_penalty=action_penalty)
+        
+        # If we're using the full RPE, we update all the weights based on the same loss function
+        if model.rpe_type == "full":
+            # Update the relevant Q-value based on the RPE
+            target_q_values = curr_q_values.copy()
+            target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
+            target_q_values = torch.tensor(target_q_values, dtype=torch.float32)
+            loss = criterion(q_values, target_q_values)
+            assert np.isclose(loss.item(), 0.5*(reward - curr_q_values[action])**2)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if save_data:
+                if spectrogram:
+                    trial_data = {
+                        "model": model,
+                        "loss": loss.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_theta": curr_theta,
+                        "correct_choice": correct_choice,
+                        "q_values": curr_q_values,
+                        "action": action,
+                        "action_probabilities": action_probabilities,
+                        "beta": beta,
+                        "reward": reward
+                    }
+                else:
+                    trial_data = {
+                        "model": model,
+                        "loss": loss.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "correct_choice": correct_choice,
+                        "q_values": curr_q_values,
+                        "action": action,
+                        "action_probabilities": action_probabilities,
+                        "beta": beta,
+                        "reward": reward,
+                    }
+                data.append(trial_data)
+                with open(save_path, 'wb') as pickle_file:
+                    pickle.dump(data, pickle_file)
+        
+        # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
+        # different loss functions
+        elif model.rpe_type == "partial":
+            
+            if tonotopy:
+                old_w1 = model.l1_weights.clone().detach().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
+            else:
+                old_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
+
+            # Compute the Q-values using only the const term
+            const_term_input = curr_stimulus.clone()
+            const_term_input[1:] = 0  # Zero out stimulus terms
+            const_q_values = model(const_term_input)
+            if tonotopy:
+                expected_const_q_values = old_w1[0] * old_w2[:,0]
+            else:
+                expected_const_q_values = old_w2 @ old_w1[:,0]
+            assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
+
+            # Compute the Q-values using only the stim term
+            stim_term_input = curr_stimulus.clone()
+            stim_term_input[0] = 0  # Zero out the constant term
+            stim_q_values = model(stim_term_input)
+            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
+            for i in range(1, num_notes + 1):
+                if tonotopy:
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w1[i] * old_w2[:,i]
+                else:
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w2 @ old_w1[:,i]
+            assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
+
+            # Calculate the loss for W1
+            cortical_loss = reward - curr_q_values[action]
+            target_cortical_q_values = curr_q_values.copy()
+            target_cortical_q_values[action] = curr_q_values[action] + cortical_loss
+            target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32)
+
+            loss_l1 = criterion(q_values, target_cortical_q_values)
+            expected_loss_l1 = 0.5 * (cortical_loss) ** 2
+            assert np.isclose(loss_l1.item(), expected_loss_l1, atol=1e-03), f"Expected: {expected_loss_l1}, Got: {loss_l1.item()}"
+
+            # Update W1
+            optimizer.zero_grad()
+            if tonotopy:
+                model.l1_weights.requires_grad = True
+            else:
+                model.l1_weights.weight.requires_grad = True
+            model.l2_weights_const.requires_grad = False
+            model.l2_weights_stim.requires_grad = False
+            loss_l1.backward(retain_graph=True)
+            if tonotopy:
+                w1_grad = model.l1_weights.grad.clone().detach().numpy().copy()
+            else:
+                w1_grad = model.l1_weights.weight.grad.clone().detach().numpy().copy()
+            optimizer.step()
+
+            # Calculate the loss for W2_const
+            curr_const_q_values = const_q_values.clone().detach().numpy().copy()
+            const_corticostriatal_loss = reward - curr_const_q_values[action]
+            target_const_q_values = curr_const_q_values.copy()
+            target_const_q_values[action] = target_const_q_values[action] + const_corticostriatal_loss
+            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
+
+            loss_l2_const = criterion(const_q_values, target_const_q_values)
+            expected_loss_l2_const = 0.5 * (const_corticostriatal_loss) ** 2
+            assert np.isclose(loss_l2_const.item(), expected_loss_l2_const, atol=1e-03), f"Expected: {expected_loss_l2_const}, Got: {loss_l2_const.item()}"
+
+            # Update W2_const
+            optimizer.zero_grad()
+            if tonotopy:
+                model.l1_weights.requires_grad = False
+            else:
+                model.l1_weights.weight.requires_grad = False
+            model.l2_weights_const.requires_grad = True
+            model.l2_weights_stim.requires_grad = False
+            loss_l2_const.backward(retain_graph=True)
+            w2_const_grad = model.l2_weights_const.grad.clone().detach().numpy().copy()
+            optimizer.step()
+
+            # Calculate the loss for W2_stim
+            curr_stim_q_values = stim_q_values.clone().detach().numpy().copy()
+            stim_corticostriatal_loss = reward - curr_stim_q_values[action]
+            target_stim_q_values = curr_stim_q_values.copy()
+            target_stim_q_values[action] = target_stim_q_values[action] + stim_corticostriatal_loss
+            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
+
+            loss_l2_stim = criterion(stim_q_values, target_stim_q_values)
+            expected_loss_l2_stim = 0.5 * (stim_corticostriatal_loss) ** 2
+            assert np.isclose(loss_l2_stim.item(), expected_loss_l2_stim, atol=1e-03), f"Expected: {expected_loss_l2_stim}, Got: {loss_l2_stim.item()}"
+
+            # Update W2_stim
+            optimizer.zero_grad()
+            if tonotopy:
+                model.l1_weights.requires_grad = False
+            else:
+                model.l1_weights.weight.requires_grad = False
+            model.l2_weights_const.requires_grad = False
+            model.l2_weights_stim.requires_grad = True
+            loss_l2_stim.backward()
+            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().numpy().copy()
+            optimizer.step()
+
+            # Need to unfreeze all the weights again
+            if tonotopy:
+                model.l1_weights.requires_grad = True
+            else:
+                model.l1_weights.weight.requires_grad = True
+            model.l2_weights_const.requires_grad = True
+            model.l2_weights_stim.requires_grad = True
+
+            if tonotopy:
+                new_w1 = model.l1_weights.clone().detach().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+            else:
+                new_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+
+            delta_w1 = new_w1 - old_w1
+            delta_w2_const = new_w2_const - old_w2_const
+            delta_w2_stim = new_w2_stim - old_w2_stim
+
+            expected_w1_grad = np.zeros(shape=delta_w1.shape)
+            expected_w2_const_grad = np.zeros(shape=delta_w2_const.shape)
+            expected_w2_stim_grad = np.zeros(shape=delta_w2_stim.shape)
+
+            if tonotopy:
+                expected_w2_const_grad[action] = old_w1[0]
+                for i in range(num_notes + 1):
+                    if i == 0:
+                        expected_w1_grad[i] = old_w2[action,0]
+                    else:
+                        expected_w1_grad[i] = curr_stimulus[i] * old_w2[action,i]
+                        expected_w2_stim_grad[action, i - 1] = curr_stimulus[i] * old_w1[i]
+            else:
+                curr_stimulus_array = curr_stimulus.clone().detach().numpy().copy()
+                expected_w2_const_grad[action] = old_w1[0,0] * curr_stimulus_array[0]
+                for i in range(num_notes + 1):
+                    if i == 0:
+                        expected_w1_grad[:,i] = old_w2[action,:]
+                    else:
+                        expected_w1_grad[:,i] = curr_stimulus_array[i] * old_w2[action,:]
+                        expected_w2_stim_grad[action, i - 1] = old_w1[i,1:] @ curr_stimulus_array[1:]
+            
+            expected_w1_grad = -1 * expected_w1_grad * cortical_loss
+            expected_w2_const_grad = -1 * expected_w2_const_grad * const_corticostriatal_loss
+            expected_w2_stim_grad = -1 * expected_w2_stim_grad * stim_corticostriatal_loss
+            assert np.allclose(w1_grad, expected_w1_grad, atol=1e-5), f"Expected: {expected_w1_grad}, Got: {w1_grad}"
+            assert np.allclose(w2_const_grad, expected_w2_const_grad, atol=1e-5), f"Expected: {expected_w2_const_grad}, Got: {w2_const_grad}"
+            assert np.allclose(w2_stim_grad, expected_w2_stim_grad, atol=1e-5), f"Expected: {expected_w2_stim_grad}, Got: {w2_stim_grad}"
+            
+            expected_delta_w1 = -1 * learning_rate * expected_w1_grad
+            expected_delta_w2_const = -1 * learning_rate *  expected_w2_const_grad
+            expected_delta_w2_stim = -1 * learning_rate * expected_w2_stim_grad
+            assert np.allclose(delta_w1, expected_delta_w1, atol=1e-5), f"Expected: {expected_delta_w1}, Got: {delta_w1}"
+            assert np.allclose(delta_w2_const, expected_delta_w2_const, atol=1e-5), f"Expected: {expected_delta_w2_const}, Got: {delta_w2_const}"
+            assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-5), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
+
+            if save_data:
+                if spectrogram:
+                    trial_data = {
+                        "model": model,
+                        "loss_l1": loss_l1.item(),
+                        "loss_l2_const": loss_l2_const.item(),
+                        "loss_l2_stim": loss_l2_stim.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_theta": curr_theta,
+                        "correct_choice": correct_choice,
+                        "q_values": curr_q_values,
+                        "action": action,
+                        "action_probabilities": action_probabilities,
+                        "beta": beta,
+                        "reward": reward
+                    }
+                else:
+                    trial_data = {
+                        "model": model,
+                        "loss_l1": loss_l1.item(),
+                        "loss_l2_const": loss_l2_const.item(),
+                        "loss_l2_stim": loss_l2_stim.item(),
+                        "trial_type": trial_type,
+                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "correct_choice": correct_choice,
+                        "q_values": curr_q_values,
+                        "action": action,
+                        "action_probabilities": action_probabilities,
+                        "beta": beta,
+                        "reward": reward
+                    }
+                data.append(trial_data)
+                with open(save_path, 'wb') as pickle_file:
+                    pickle.dump(data, pickle_file)
+
+def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
+                            num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+    """This function runs an experiment similar to that used to train the animals for a deep network trained via reinforcement learning.
+
+    Args:
+        spectrogram (bool, optional): If true, then the network trains on the full auditory task; if false, the network trains on the simpler, general task. Defaults to True.
+        task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
+        thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
+                                 The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
+        num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
+        p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
+        p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
+        p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
+        num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
+        learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
+        beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
+        rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
+        tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
+        save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
+        save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
+    """
+    # If training on the basic task (input indicates just the presence of the left or right stimulus), then the input dimension
+    # (parametrized in the networks as as num_notes) is 2.
+    if not spectrogram:
+        num_notes = 2
+
+    # If this is the first task, then initialize a new network
+    if task_id == 0:
+        model = DeepRLAuditoryDiscriminationNetwork(rpe_type=rpe_type, tonotopy=tonotopy, num_notes=num_notes)
+    # However, if this is one of the later tasks, load a previously trained network
+    else:
+        with open(model_path, 'rb') as file:
+            data = pickle.load(file)
+        model = data[-1]["model"]
+        # Check that the model is the correct type
+        assert(type(model) == DeepRLAuditoryDiscriminationNetwork)
+        assert(model.rpe_type == rpe_type)
+        assert(model.tonotopy == tonotopy)
+    
+    # If saving the data, start by saving the initialized model
+    if save_data:
+        if task_id == 0:
+            data = [{
+                "model": model
+            }]
+        else:
+            data = [{
+                "model": model,
+                "model_path": model_path
+            }]
         with open(save_path, 'wb') as pickle_file:
             pickle.dump(data, pickle_file)
     
@@ -583,29 +959,21 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
                 old_w1 = model.l1_weights.clone().detach().numpy().copy()
                 old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
                 old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
-
-                w1 = model.l1_weights.clone().detach().numpy()
-                w2_const = model.l2_weights_const.clone().detach().numpy()
-                w2_stim = model.l2_weights_stim.clone().detach().numpy()
-                w2 = np.concatenate((w2_const, w2_stim), axis=1)
+                old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
             else:
                 old_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
                 old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
                 old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
-
-                w1 = model.l1_weights.weight.clone().detach().numpy()
-                w2_const = model.l2_weights_const.clone().detach().numpy()
-                w2_stim = model.l2_weights_stim.clone().detach().numpy()
-                w2 = np.concatenate((w2_const, w2_stim), axis=1)
+                old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
             const_q_values = model(const_term_input)
             if tonotopy:
-                expected_const_q_values = w1[0] * w2[:,0]
+                expected_const_q_values = old_w1[0] * old_w2[:,0]
             else:
-                expected_const_q_values = w2 @ w1[:,0]
+                expected_const_q_values = old_w2 @ old_w1[:,0]
             assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
 
             # Compute the Q-values using only the stim term
@@ -615,9 +983,9 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
             for i in range(1, num_notes + 1):
                 if tonotopy:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w1[i] * w2[:,i]
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w1[i] * old_w2[:,i]
                 else:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w2 @ w1[:,i]
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w2 @ old_w1[:,i]
             assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
 
             # Calculate the loss for W1
@@ -627,15 +995,22 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32)
 
             loss_l1 = criterion(q_values, target_cortical_q_values)
-            expected_loss_l1 = 0.5 * (reward - curr_q_values[action]) ** 2
+            expected_loss_l1 = 0.5 * (cortical_loss) ** 2
             assert np.isclose(loss_l1.item(), expected_loss_l1, atol=1e-03), f"Expected: {expected_loss_l1}, Got: {loss_l1.item()}"
 
             # Update W1
             optimizer.zero_grad()
-            model.l1_weights.requires_grad = True
+            if tonotopy:
+                model.l1_weights.requires_grad = True
+            else:
+                model.l1_weights.weight.requires_grad = True
             model.l2_weights_const.requires_grad = False
             model.l2_weights_stim.requires_grad = False
             loss_l1.backward(retain_graph=True)
+            if tonotopy:
+                w1_grad = model.l1_weights.grad.clone().detach().numpy().copy()
+            else:
+                w1_grad = model.l1_weights.weight.grad.clone().detach().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_const
@@ -646,15 +1021,19 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
 
             loss_l2_const = criterion(const_q_values, target_const_q_values)
-            expected_loss_l2_const = 0.5 * (reward - curr_const_q_values[action]) ** 2
+            expected_loss_l2_const = 0.5 * (const_corticostriatal_loss) ** 2
             assert np.isclose(loss_l2_const.item(), expected_loss_l2_const, atol=1e-03), f"Expected: {expected_loss_l2_const}, Got: {loss_l2_const.item()}"
 
             # Update W2_const
             optimizer.zero_grad()
-            model.l1_weights.requires_grad = False
+            if tonotopy:
+                model.l1_weights.requires_grad = False
+            else:
+                model.l1_weights.weight.requires_grad = False
             model.l2_weights_const.requires_grad = True
             model.l2_weights_stim.requires_grad = False
             loss_l2_const.backward(retain_graph=True)
+            w2_const_grad = model.l2_weights_const.grad.clone().detach().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_stim
@@ -665,19 +1044,26 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
 
             loss_l2_stim = criterion(stim_q_values, target_stim_q_values)
-            expected_loss_l2_stim = 0.5 * (reward - curr_stim_q_values[action]) ** 2
+            expected_loss_l2_stim = 0.5 * (stim_corticostriatal_loss) ** 2
             assert np.isclose(loss_l2_stim.item(), expected_loss_l2_stim, atol=1e-03), f"Expected: {expected_loss_l2_stim}, Got: {loss_l2_stim.item()}"
 
             # Update W2_stim
             optimizer.zero_grad()
-            model.l1_weights.requires_grad = False
+            if tonotopy:
+                model.l1_weights.requires_grad = False
+            else:
+                model.l1_weights.weight.requires_grad = False
             model.l2_weights_const.requires_grad = False
             model.l2_weights_stim.requires_grad = True
             loss_l2_stim.backward()
+            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().numpy().copy()
             optimizer.step()
 
             # Need to unfreeze all the weights again
-            model.l1_weights.requires_grad = True
+            if tonotopy:
+                model.l1_weights.requires_grad = True
+            else:
+                model.l1_weights.weight.requires_grad = True
             model.l2_weights_const.requires_grad = True
             model.l2_weights_stim.requires_grad = True
 
@@ -694,24 +1080,41 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
             delta_w2_const = new_w2_const - old_w2_const
             delta_w2_stim = new_w2_stim - old_w2_stim
 
-            expected_delta_w1 = np.zeros(shape=delta_w1.shape)
-            expected_delta_w2_const = np.zeros(shape=delta_w2_const.shape)
-            expected_delta_w2_stim = np.zeros(shape=delta_w2_stim.shape)
+            expected_w1_grad = np.zeros(shape=delta_w1.shape)
+            expected_w2_const_grad = np.zeros(shape=delta_w2_const.shape)
+            expected_w2_stim_grad = np.zeros(shape=delta_w2_stim.shape)
 
-            for i in range(num_notes + 1):
-                if i == 0:
-                    expected_delta_w1[i] = w2[action,0]
-                else:
-                    expected_delta_w1[i] = curr_stimulus[i] * w2[action,i]
-                    expected_delta_w2_stim[action, i - 1] = curr_stimulus[i] * w1[i]
-
-            expected_delta_w1 = learning_rate * cortical_loss * expected_delta_w1
-            expected_delta_w2_const[action] = learning_rate * const_corticostriatal_loss * w1[0]
-            expected_delta_w2_stim = learning_rate * stim_corticostriatal_loss * expected_delta_w2_stim
-
-            assert np.allclose(delta_w1, expected_delta_w1, atol=1e-03), f"Expected: {expected_delta_w1}, Got: {delta_w1}"
-            assert np.allclose(delta_w2_const, expected_delta_w2_const, atol=1e-03), f"Expected: {expected_delta_w2_const}, Got: {delta_w2_const}"
-            assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-03), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
+            if tonotopy:
+                expected_w2_const_grad[action] = old_w1[0]
+                for i in range(num_notes + 1):
+                    if i == 0:
+                        expected_w1_grad[i] = old_w2[action,0]
+                    else:
+                        expected_w1_grad[i] = curr_stimulus[i] * old_w2[action,i]
+                        expected_w2_stim_grad[action, i - 1] = curr_stimulus[i] * old_w1[i]
+            else:
+                curr_stimulus_array = curr_stimulus.clone().detach().numpy().copy()
+                expected_w2_const_grad[action] = old_w1[0,0] * curr_stimulus_array[0]
+                for i in range(num_notes + 1):
+                    if i == 0:
+                        expected_w1_grad[:,i] = old_w2[action,:]
+                    else:
+                        expected_w1_grad[:,i] = curr_stimulus_array[i] * old_w2[action,:]
+                        expected_w2_stim_grad[action, i - 1] = old_w1[i,1:] @ curr_stimulus_array[1:]
+            
+            expected_w1_grad = -1 * expected_w1_grad * cortical_loss
+            expected_w2_const_grad = -1 * expected_w2_const_grad * const_corticostriatal_loss
+            expected_w2_stim_grad = -1 * expected_w2_stim_grad * stim_corticostriatal_loss
+            assert np.allclose(w1_grad, expected_w1_grad, atol=1e-5), f"Expected: {expected_w1_grad}, Got: {w1_grad}"
+            assert np.allclose(w2_const_grad, expected_w2_const_grad, atol=1e-5), f"Expected: {expected_w2_const_grad}, Got: {w2_const_grad}"
+            assert np.allclose(w2_stim_grad, expected_w2_stim_grad, atol=1e-5), f"Expected: {expected_w2_stim_grad}, Got: {w2_stim_grad}"
+            
+            expected_delta_w1 = -1 * learning_rate * expected_w1_grad
+            expected_delta_w2_const = -1 * learning_rate *  expected_w2_const_grad
+            expected_delta_w2_stim = -1 * learning_rate * expected_w2_stim_grad
+            assert np.allclose(delta_w1, expected_delta_w1, atol=1e-5), f"Expected: {expected_delta_w1}, Got: {delta_w1}"
+            assert np.allclose(delta_w2_const, expected_delta_w2_const, atol=1e-5), f"Expected: {expected_delta_w2_const}, Got: {delta_w2_const}"
+            assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-5), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
 
             if save_data:
                 if spectrogram:
@@ -749,7 +1152,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes
                 with open(save_path, 'wb') as pickle_file:
                     pickle.dump(data, pickle_file)
 
-def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, 
                                         num_trials=10000, learning_rate=0.1, beta=2.5, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a shallow network trained via supervised learning.
 
@@ -758,6 +1161,7 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
@@ -771,13 +1175,28 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
     if not spectrogram:
         num_notes = 2
     
-    model = ShallowSupervisedAuditoryDiscriminationNetwork(num_notes=num_notes)
+    # If this is the first task, then initialize a new network
+    if task_id == 0:
+        model = ShallowSupervisedAuditoryDiscriminationNetwork(num_notes=num_notes)
+    # However, if this is one of the later tasks, load a previously trained network
+    else:
+        with open(model_path, 'rb') as file:
+            data = pickle.load(file)
+        model = data[-1]["model"]
+        # Check that the model is the correct type
+        assert(type(model) == ShallowSupervisedAuditoryDiscriminationNetwork)
     
     # If saving the data, start by saving the initialized model
     if save_data:
-        data = [{
-            "model": model
-        }]
+        if task_id == 0:
+            data = [{
+                "model": model
+            }]
+        else:
+            data = [{
+                "model": model,
+                "model_path": model_path
+            }]
         with open(save_path, 'wb') as pickle_file:
             pickle.dump(data, pickle_file)
 
@@ -842,7 +1261,7 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
             with open(save_path, 'wb') as pickle_file:
                 pickle.dump(data, pickle_file)
 
-def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, 
+def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, 
                                     num_trials=10000, learning_rate=0.1, beta=2.5, tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a deep network trained via supervised learning.
 
@@ -851,6 +1270,7 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], n
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
@@ -865,13 +1285,29 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], n
     if not spectrogram:
         num_notes = 2
     
-    model = DeepSupervisedAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
+    # If this is the first task, then initialize a new network
+    if task_id == 0:
+        model = DeepSupervisedAuditoryDiscriminationNetwork(tonotopy=tonotopy, num_notes=num_notes)
+    # However, if this is one of the later tasks, load a previously trained network
+    else:
+        with open(model_path, 'rb') as file:
+            data = pickle.load(file)
+        model = data[-1]["model"]
+        # Check that the model is the correct type
+        assert(type(model) == DeepSupervisedAuditoryDiscriminationNetwork)
+        assert(model.tonotopy == tonotopy)
     
     # If saving the data, start by saving the initialized model
     if save_data:
-        data = [{
-            "model": model
-        }]
+        if task_id == 0:
+            data = [{
+                "model": model
+            }]
+        else:
+            data = [{
+                "model": model,
+                "model_path": model_path
+            }]
         with open(save_path, 'wb') as pickle_file:
             pickle.dump(data, pickle_file)
 
@@ -942,8 +1378,8 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], n
             with open(save_path, 'wb') as pickle_file:
                 pickle.dump(data, pickle_file)
 
-def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
-                    num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
+                    num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", inaction=False, tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals.
 
     Args:
@@ -951,6 +1387,7 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2). Defaults to 0.
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
+        model_path (pathlib Path object): Path to the previously trained network. Needed if task_id is not zero. Defaults to None.
         num_notes (int, optional): Number of notes used to create the polyphonic sound. Defaults to 7.
         p_train (float, optional): Probability of a train trial (vs. test/validation trial). Defaults to 0.8.
         p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
@@ -961,26 +1398,33 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], num_notes=7, p_tr
         depth (bool, optional): If true, the network trained is a deep network; if false, the network trained is a shallow network. Defaults to True.
         rpe (bool, optional): If true, then the network learns via reinforcement learning; if false, the network learns via supervised learning. Defaults to True.
         rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
+        inaction (bool, optional): If true, then the network has three outputs, representing the Q-values for a left choice, a right choice, and inaction. Defaults to False.
         tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
     if rpe:
         if depth:
-            run_deep_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
-                                   p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
-                                   num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
-                                   tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+            if inaction:
+                run_deep_rl_with_inaction_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
+                                                      p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
+                                                      num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
+                                                      tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+            else:
+                run_deep_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
+                                        p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
+                                        num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
+                                        tonotopy=tonotopy, save_data=save_data, save_path=save_path)
         else:
-            run_shallow_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
-                                   p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
-                                   save_data=save_data, save_path=save_path)
+            run_shallow_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
+                                       p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
+                                       save_data=save_data, save_path=save_path)
     else:
         if depth:
-            run_deep_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
-                                   p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, 
-                                   tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+            run_deep_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
+                                            p_train=p_train, num_trials=num_trials, learning_rate=learning_rate, 
+                                            tonotopy=tonotopy, save_data=save_data, save_path=save_path)
         else:
-            run_shallow_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, num_notes=num_notes, 
-                                   p_train=p_train, num_trials=num_trials, learning_rate=learning_rate,
-                                   save_data=save_data, save_path=save_path)
+            run_shallow_supervised_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
+                                               p_train=p_train, num_trials=num_trials, learning_rate=learning_rate,
+                                               save_data=save_data, save_path=save_path)
