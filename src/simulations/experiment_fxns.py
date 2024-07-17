@@ -144,32 +144,46 @@ def select_action(q_values, beta=2.5):
         beta (float, optional): Inverse temperature parameter. Defaults to 2.5.
 
     Returns:
-        action (int): Chosen action. Either 0 (left choice) or 1 (right choice).
-        probabilities (num_actions array): Probability of choosing either 0 (left choice) or 1 (right choice).
+        action (int): Chosen action. Either 0 (left choice) or 1 (right choice) or 2 (inaction) for networks that can choose not to act.
+        probabilities (num_actions array): Probability of choosing either 0 (left choice) or 1 (right choice) or 2 (inaction) for
+                                            networks that can choose not to act.
     """
     exponent = np.exp(beta * q_values)
     probabilities = exponent / np.sum(exponent)
     action = np.random.choice(range(len(q_values)), p=probabilities)
     return action, probabilities
 
-def get_general_reward(trial_type, action, correct_choice, p_reward_train=1, p_reward_test_validation=0.5):
+def get_general_reward(trial_type, action, correct_choice, p_reward_train=1, p_reward_test_validation=0.5,
+                        with_inaction=False, reward_volume=20, action_penalty=5):
     """This function determines the reward delivered on a given trial in the general version of the task.
 
     Args:
         trial_type (string): The type of the current trial. Either train, test, or validation.
-        action (int): Action the agent chose. Either 0 (left choice) or 1 (right choice)
+        action (int): Action the agent chose. Either 0 (left choice) or 1 (right choice) or 2 (inaction) for networks that can choose not to act.
         correct_choice (int): Correct action associated with the stimulus. Either 0 (left choice) or 1 (right choice).
         p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
         p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
+        with_inaction (bool, optional): If true, indicates that the model can also choose inaction. Defaults to False.
+        reward_volume (int, optional): Only relevant if with_inaction is True. Amount of reward delivered. Defaults to 20.
+        action_penalty (int, optional): Only relevant if with_inaction is True. Cost of acting. Defaults to 5.
 
     Returns:
-        int: Indicates presence or absence of reward.
+        int: Indicates presence or absence of reward. If with_inaction is True, indicates net amount of reward (reward_volume - action_penalty).
     """
+
+    if with_inaction:
+        net_reward = reward_volume - action_penalty 
+        # If the network chooses not to act, then there's neither a reward nor an action penalty
+        if action == 2:
+            return 0
+    else:
+        net_reward = 1
+
     if trial_type == "train":
         if action == correct_choice:
             reward = random.random()
             if reward < p_reward_train:
-                return 1
+                return net_reward
             else:
                 return 0
         else:
@@ -177,33 +191,46 @@ def get_general_reward(trial_type, action, correct_choice, p_reward_train=1, p_r
     else:
         reward = random.random()
         if reward < p_reward_test_validation:
-            return 1
+            return net_reward
         else:
             return 0
 
-def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward_train=1, p_reward_test_validation=0.5, ):
+def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90], p_reward_train=1, p_reward_test_validation=0.5,
+                         with_inaction=False, reward_volume=20, action_penalty=5):
     """This function determines the reward delivered on a given trial in the auditory version of the task.
 
     Args:
         trial_type (string): The type of the current trial. Either train, test, or validation.
         curr_theta (float): The theta used to generate the spectrogram for the stimulus for the current trial.
-        action (int): Action the agent chose. Either 0 (left choice) or 1 (right choice).
+        action (int): Action the agent chose. Either 0 (left choice) or 1 (right choice) or 2 (inaction) for networks that can choose not to act.
         task_id (int, optional): The number of the task. Either 0 (task 1) or 1 (task 2).
         thetas (list, optional): Angles for the right choice sounds for tasks 1 (element 0) and 2 (element 1). 
                                  The left choice sounds are just those angles + 180 degrees. Defaults to [0,90].
         p_reward_train (float, optional): Probability that the current trial is rewarded for train trials. Defaults to 1.
         p_reward_test_validation (float, optional): Probability that the current trial is rewarded for validation and test trials. Defaults to 0.5.
+        with_inaction (bool, optional): If true, indicates that the model can also choose inaction. Defaults to False.
+        reward_volume (int, optional): Only relevant if with_inaction is True. Amount of reward delivered. Defaults to 20.
+        action_penalty (int, optional): Only relevant if with_inaction is True. Cost of acting. Defaults to 5.
 
     Returns:
-        int: Indicates presence or absence of reward.
+        int: Indicates presence or absence of reward. If with_inaction is True, indicates net amount of reward (reward_volume - action_penalty).
     """
+
+    if with_inaction:
+        net_reward = reward_volume - action_penalty
+        # If the network chooses not to act, then there's neither a reward nor an action penalty
+        if action == 2:
+            return 0
+    else:
+        net_reward = 1
+
     if trial_type == "train":
         # If the current angle is the first sound of the task, then reward the right choice
         if curr_theta == thetas[task_id]:
             if action == 1:
                 reward = random.random()
                 if reward < p_reward_train:
-                    return 1
+                    return net_reward
                 else:
                     return 0
             else:
@@ -213,7 +240,7 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
             if action == 0:
                 reward = random.random()
                 if reward < p_reward_train:
-                    return 1
+                    return net_reward
                 else:
                     return 0
             else:
@@ -221,7 +248,7 @@ def get_auditory_reward(trial_type, curr_theta, action, task_id=0, thetas=[0,90]
     else:
         reward = random.random()
         if reward < p_reward_test_validation:
-            return 1
+            return net_reward
         else:
             return 0
 
@@ -475,7 +502,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
                     pickle.dump(data, pickle_file)
 
 def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
-                                          num_trials=10000, learning_rate=0.1, beta=2.5, action_penalty= rpe_type="full", tonotopy=False, save_data=True, save_path=None):
+                                          num_trials=10000, learning_rate=0.1, beta=2.5, reward_volume=20, action_penalty=5, 
+                                          rpe_type="full", tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals for a deep network trained via reinforcement learning.
 
     Args:
@@ -491,6 +519,8 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
         num_trials (int, optional): Number of trials in the experiment. Defaults to 10000.
         learning_rate (float, optional): Learning rate for the network. Defaults to 0.1.
         beta (float, optional): Inverse temperature parameter for the softmax action selection. Defaults to 2.5.
+        reward_volume (int, optional): Amount of reward delivered. Defaults to 20.
+        action_penalty (int, optional): Cost of acting. Defaults to 5.
         rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
         tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
@@ -563,11 +593,11 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
         if spectrogram:
             reward = get_auditory_reward(trial_type, curr_theta, action, task_id, thetas, 
                                           p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
-                                          with_inaction=True, action_penalty=action_penalty)
+                                          with_inaction=True, reward_volume=reward_volume, action_penalty=action_penalty)
         else:
             reward = get_general_reward(trial_type, action, correct_choice, 
                                          p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
-                                         with_inaction=True, action_penalty=action_penalty)
+                                         with_inaction=True, reward_volume=reward_volume, action_penalty=action_penalty)
         
         # If we're using the full RPE, we update all the weights based on the same loss function
         if model.rpe_type == "full":
@@ -576,7 +606,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
             target_q_values = torch.tensor(target_q_values, dtype=torch.float32)
             loss = criterion(q_values, target_q_values)
-            assert np.isclose(loss.item(), 0.5*(reward - curr_q_values[action])**2)
+            assert np.isclose(loss.item(), 1/3*(reward - curr_q_values[action])**2)
             
             optimizer.zero_grad()
             loss.backward()
@@ -595,7 +625,9 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "action": action,
                         "action_probabilities": action_probabilities,
                         "beta": beta,
-                        "reward": reward
+                        "reward": reward,
+                        "reward_volume": reward_volume,
+                        "action_penalty": action_penalty
                     }
                 else:
                     trial_data = {
@@ -609,6 +641,8 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "action_probabilities": action_probabilities,
                         "beta": beta,
                         "reward": reward,
+                        "reward_volume": reward_volume,
+                        "action_penalty": action_penalty
                     }
                 data.append(trial_data)
                 with open(save_path, 'wb') as pickle_file:
@@ -658,7 +692,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32)
 
             loss_l1 = criterion(q_values, target_cortical_q_values)
-            expected_loss_l1 = 0.5 * (cortical_loss) ** 2
+            expected_loss_l1 = 1/3 * (cortical_loss) ** 2
             assert np.isclose(loss_l1.item(), expected_loss_l1, atol=1e-03), f"Expected: {expected_loss_l1}, Got: {loss_l1.item()}"
 
             # Update W1
@@ -684,7 +718,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
 
             loss_l2_const = criterion(const_q_values, target_const_q_values)
-            expected_loss_l2_const = 0.5 * (const_corticostriatal_loss) ** 2
+            expected_loss_l2_const = 1/3 * (const_corticostriatal_loss) ** 2
             assert np.isclose(loss_l2_const.item(), expected_loss_l2_const, atol=1e-03), f"Expected: {expected_loss_l2_const}, Got: {loss_l2_const.item()}"
 
             # Update W2_const
@@ -707,7 +741,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
 
             loss_l2_stim = criterion(stim_q_values, target_stim_q_values)
-            expected_loss_l2_stim = 0.5 * (stim_corticostriatal_loss) ** 2
+            expected_loss_l2_stim = 1/3 * (stim_corticostriatal_loss) ** 2
             assert np.isclose(loss_l2_stim.item(), expected_loss_l2_stim, atol=1e-03), f"Expected: {expected_loss_l2_stim}, Got: {loss_l2_stim.item()}"
 
             # Update W2_stim
@@ -765,9 +799,9 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         expected_w1_grad[:,i] = curr_stimulus_array[i] * old_w2[action,:]
                         expected_w2_stim_grad[action, i - 1] = old_w1[i,1:] @ curr_stimulus_array[1:]
             
-            expected_w1_grad = -1 * expected_w1_grad * cortical_loss
-            expected_w2_const_grad = -1 * expected_w2_const_grad * const_corticostriatal_loss
-            expected_w2_stim_grad = -1 * expected_w2_stim_grad * stim_corticostriatal_loss
+            expected_w1_grad = -1 * expected_w1_grad * 2/3 * cortical_loss
+            expected_w2_const_grad = -1 * expected_w2_const_grad * 2/3 * const_corticostriatal_loss
+            expected_w2_stim_grad = -1 * expected_w2_stim_grad * 2/3 * stim_corticostriatal_loss
             assert np.allclose(w1_grad, expected_w1_grad, atol=1e-5), f"Expected: {expected_w1_grad}, Got: {w1_grad}"
             assert np.allclose(w2_const_grad, expected_w2_const_grad, atol=1e-5), f"Expected: {expected_w2_const_grad}, Got: {w2_const_grad}"
             assert np.allclose(w2_stim_grad, expected_w2_stim_grad, atol=1e-5), f"Expected: {expected_w2_stim_grad}, Got: {w2_stim_grad}"
@@ -794,7 +828,9 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "action": action,
                         "action_probabilities": action_probabilities,
                         "beta": beta,
-                        "reward": reward
+                        "reward": reward,
+                        "reward_volume": reward_volume,
+                        "action_penalty": action_penalty
                     }
                 else:
                     trial_data = {
@@ -809,7 +845,9 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "action": action,
                         "action_probabilities": action_probabilities,
                         "beta": beta,
-                        "reward": reward
+                        "reward": reward,
+                        "reward_volume": reward_volume,
+                        "action_penalty": action_penalty
                     }
                 data.append(trial_data)
                 with open(save_path, 'wb') as pickle_file:
@@ -1379,7 +1417,8 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
                 pickle.dump(data, pickle_file)
 
 def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
-                    num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", inaction=False, tonotopy=False, save_data=True, save_path=None):
+                    num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", with_inaction=False, reward_volume=20,
+                    action_penalty=5, tonotopy=False, save_data=True, save_path=None):
     """This function runs an experiment similar to that used to train the animals.
 
     Args:
@@ -1398,18 +1437,20 @@ def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, 
         depth (bool, optional): If true, the network trained is a deep network; if false, the network trained is a shallow network. Defaults to True.
         rpe (bool, optional): If true, then the network learns via reinforcement learning; if false, the network learns via supervised learning. Defaults to True.
         rpe_type (str, optional): Specifies the type of the RPE signal, either "full" or "partial". Defaults to "full".
-        inaction (bool, optional): If true, then the network has three outputs, representing the Q-values for a left choice, a right choice, and inaction. Defaults to False.
+        with_inaction (bool, optional): If true, then the network has three outputs, representing the Q-values for a left choice, a right choice, and inaction. Defaults to False.
+        reward_volume (int, optional): Only relevant if with_inaction is True. Amount of reward delivered. Defaults to 20.
+        action_penalty (int, optional): Only relevant if with_inaction is True. Cost of acting. Defaults to 5.
         tonotopy (bool, optional): If true, then the first layer weights are diagonal, motivated by the existence of tonotopy in auditory cortex. Defaults to False.
         save_data (bool, optional): If true, after every iteration, this function saves a dictionary with relevant trial variables. Defaults to True.
         save_path (pathlib Path object): Path to where data should be saved. Defaults to None.
     """
     if rpe:
         if depth:
-            if inaction:
+            if with_inaction:
                 run_deep_rl_with_inaction_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
                                                       p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,
-                                                      num_trials=num_trials, learning_rate=learning_rate, rpe_type=rpe_type, 
-                                                      tonotopy=tonotopy, save_data=save_data, save_path=save_path)
+                                                      num_trials=num_trials, learning_rate=learning_rate, beta=beta, reward_volume=reward_volume,
+                                                      action_penalty=action_penalty, rpe_type=rpe_type, tonotopy=tonotopy, save_data=save_data, save_path=save_path)
             else:
                 run_deep_rl_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, 
                                         p_train=p_train, p_reward_train=p_reward_train, p_reward_test_validation=p_reward_test_validation,

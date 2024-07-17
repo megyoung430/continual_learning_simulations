@@ -8,6 +8,15 @@ import numpy as np
 from ..models.networks import *
 
 def get_all_models(data_directory, model_name):
+    """This function gets all the filenames associated for a particular model.
+
+    Args:
+        data_directory (pathlib Path object)
+        model_name (string)
+    
+    Returns:
+        (list)
+    """
 
     pattern = f"*{model_name}*.pk1"
     return list(data_directory.glob(pattern))
@@ -16,11 +25,12 @@ def calculate_accuracy_over_training(data_path, trial_type, window=100):
     """This function calculates the accuracy of the model on train trials over the course of training.
 
     Args:
-        data_path (Path object): Path to the data.
+        data_path (pathlib Path object): Path to the data.
 
     Returns:
         accuracy_over_training (num_trials array): Running accuracy of the model after each trial.
     """
+    
 
     with open(data_path, 'rb') as file:
         data = pickle.load(file)

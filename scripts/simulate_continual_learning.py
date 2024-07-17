@@ -4,7 +4,7 @@ import src.simulations.experiment_fxns as exp
 num_simulations = 5
 spectrogram = True
 task_id = 1
-thetas = [0,90]
+thetas = [0,45]
 num_notes = 7
 p_train = 1
 num_trials = 10000
@@ -59,7 +59,7 @@ else:
         else:
             base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_supervised/simplified_task/"
 
-ver = 2
+ver = 1
 old_task_id = 0
 MODEL_FILE_NAME = "Task " + str(old_task_id) + ", Theta " + str(thetas[old_task_id]) + " (" + str(ver) + ")" + ".pk1"
 model_path = base_path + MODEL_FILE_NAME
