@@ -288,6 +288,10 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
         assert(type(model) == ShallowRLAuditoryDiscriminationNetwork)
         assert(model.rpe_type == rpe_type)
     
+    # Check to see if GPU is available; otherwise, use cpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
     # If saving the data, start by saving the initialized model
     if save_data:
         if task_id == 0:
@@ -323,11 +327,12 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
         else:
             curr_stimulus, correct_choice = get_general_stimulus()
+        curr_stimulus = curr_stimulus.to(device)
         
         # The output of the network are the Q-values associated with choosing
         # left or right.
         q_values = model(curr_stimulus)
-        curr_q_values = q_values.clone().detach().numpy().copy()
+        curr_q_values = q_values.clone().detach().cpu().numpy().copy()
         
         # Then select an action through a softmax function.
         action, action_probabilities = select_action(curr_q_values, beta=beta)
@@ -343,7 +348,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             # Update the relevant Q-value based on the RPE
             target_q_values = curr_q_values.copy()
             target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
-            target_q_values = torch.tensor(target_q_values, dtype=torch.float32)
+            target_q_values = torch.tensor(target_q_values, dtype=torch.float32).to(device)
             loss = criterion(q_values, target_q_values)
             assert np.isclose(loss.item(), 0.5*(reward - curr_q_values[action])**2)
             
@@ -357,7 +362,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -371,7 +376,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -386,35 +391,37 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
         # If we're using partial RPEs, we update W1_const and W1_stim independently, using three
         # different loss functions
         elif model.rpe_type == "partial":
-            old_w1_const = model.l1_weights_const.clone().detach().numpy().copy()
-            old_w1_stim = model.l1_weights_stim.clone().detach().numpy().copy()
+            old_w1_const = model.l1_weights_const.clone().detach().cpu().numpy().copy()
+            old_w1_stim = model.l1_weights_stim.clone().detach().cpu().numpy().copy()
 
-            w1_const = model.l1_weights_const.clone().detach().numpy()
-            w1_stim = model.l1_weights_stim.clone().detach().numpy()
+            w1_const = model.l1_weights_const.clone().detach().cpu().numpy().copy()
+            w1_stim = model.l1_weights_stim.clone().detach().cpu().numpy().copy()
             w1 = np.concatenate((w1_const, w1_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
+            const_term_input.to(device)
             const_q_values = model(const_term_input)
             expected_const_q_values = w1[0]
-            assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
+            assert np.allclose(const_q_values.clone().detach().cpu().numpy().copy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Compute the Q-values using only the stim term
             stim_term_input = curr_stimulus.clone()
             stim_term_input[0] = 0  # Zero out the constant term
+            stim_term_input.to(device)
             stim_q_values = model(stim_term_input)
-            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
+            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().cpu().numpy().copy().shape)
             for i in range(1, num_notes + 1):
-                expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * w1[i]
-            assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
+                expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * w1[i]
+            assert np.allclose(stim_q_values.clone().detach().cpu().numpy().copy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Calculate the loss for W1_const
-            curr_const_q_values = const_q_values.clone().detach().numpy().copy()
+            curr_const_q_values = const_q_values.clone().detach().cpu().numpy().copy()
             const_corticostriatal_loss = reward - curr_const_q_values[action]
             target_const_q_values = curr_const_q_values.copy()
             target_const_q_values[action] = target_const_q_values[action] + const_corticostriatal_loss
-            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
+            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32).to(device)
 
             loss_l1_const = criterion(const_q_values, target_const_q_values)
             expected_loss_l1_const = 0.5 * (reward - curr_const_q_values[action]) ** 2
@@ -428,11 +435,11 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             optimizer.step()
 
             # Calculate the loss for W1_stim
-            curr_stim_q_values = stim_q_values.clone().detach().numpy().copy()
+            curr_stim_q_values = stim_q_values.clone().detach().cpu().numpy().copy()
             stim_corticostriatal_loss = reward - curr_stim_q_values[action]
             target_stim_q_values = curr_stim_q_values.copy()
             target_stim_q_values[action] = target_stim_q_values[action] + stim_corticostriatal_loss
-            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
+            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32).to(device)
 
             loss_l1_stim = criterion(stim_q_values, target_stim_q_values)
             expected_loss_l1_stim = 0.5 * (reward - curr_stim_q_values[action]) ** 2
@@ -449,8 +456,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             model.l1_weights_const.requires_grad = True
             model.l1_weights_stim.requires_grad = True
 
-            new_w1_const = model.l1_weights_const.clone().detach().numpy().copy()
-            new_w1_stim = model.l1_weights_stim.clone().detach().numpy().copy()
+            new_w1_const = model.l1_weights_const.clone().detach().cpu().numpy().copy()
+            new_w1_stim = model.l1_weights_stim.clone().detach().cpu().numpy().copy()
 
             delta_w1_const = new_w1_const - old_w1_const
             delta_w1_stim = new_w1_stim - old_w1_stim
@@ -464,8 +471,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             expected_delta_w1_const[action] = learning_rate * const_corticostriatal_loss * w1[0]
             expected_delta_w1_stim = learning_rate * stim_corticostriatal_loss * expected_delta_w1_stim
 
-            assert np.allclose(delta_w1_const, expected_delta_w2_const, atol=1e-03), f"Expected: {expected_delta_w1_const}, Got: {delta_w1_const}"
-            assert np.allclose(delta_w1_stim, expected_delta_w2_stim, atol=1e-03), f"Expected: {expected_delta_w1_stim}, Got: {delta_w1_stim}"
+            assert np.allclose(delta_w1_const, expected_delta_w1_const, atol=1e-03), f"Expected: {expected_delta_w1_const}, Got: {delta_w1_const}"
+            assert np.allclose(delta_w1_stim, expected_delta_w1_stim, atol=1e-03), f"Expected: {expected_delta_w1_stim}, Got: {delta_w1_stim}"
 
             if save_data:
                 if spectrogram:
@@ -474,7 +481,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
                         "loss_l1_const": loss_l1_const.item(),
                         "loss_l1_stim": loss_l1_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -489,7 +496,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
                         "loss_l1_const": loss_l2_const.item(),
                         "loss_l1_stim": loss_l2_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -544,6 +551,10 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
         assert(model.rpe_type == rpe_type)
         assert(model.tonotopy == tonotopy)
     
+    # Check to see if GPU is available; otherwise, use cpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
     # If saving the data, start by saving the initialized model
     if save_data:
         if task_id == 0:
@@ -580,11 +591,12 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
         else:
             curr_stimulus, correct_choice = get_general_stimulus()
+        curr_stimulus = curr_stimulus.to(device)
         
         # The output of the network are the Q-values associated with choosing
         # left or right.
         q_values = model(curr_stimulus)
-        curr_q_values = q_values.clone().detach().numpy().copy()
+        curr_q_values = q_values.clone().detach().cpu().numpy().copy()
         
         # Then select an action through a softmax function.
         action, action_probabilities = select_action(curr_q_values, beta=beta)
@@ -604,7 +616,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             # Update the relevant Q-value based on the RPE
             target_q_values = curr_q_values.copy()
             target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
-            target_q_values = torch.tensor(target_q_values, dtype=torch.float32)
+            target_q_values = torch.tensor(target_q_values, dtype=torch.float32).to(device)
             loss = criterion(q_values, target_q_values)
             assert np.isclose(loss.item(), 1/3*(reward - curr_q_values[action])**2)
             
@@ -618,7 +630,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -634,7 +646,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -653,43 +665,45 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
         elif model.rpe_type == "partial":
             
             if tonotopy:
-                old_w1 = model.l1_weights.clone().detach().numpy().copy()
-                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w1 = model.l1_weights.clone().detach().cpu().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
                 old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
             else:
-                old_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
-                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w1 = model.l1_weights.weight.clone().detach().cpu().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
                 old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
+            const_term_input.to(device)
             const_q_values = model(const_term_input)
             if tonotopy:
                 expected_const_q_values = old_w1[0] * old_w2[:,0]
             else:
                 expected_const_q_values = old_w2 @ old_w1[:,0]
-            assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
+            assert np.allclose(const_q_values.clone().detach().cpu().numpy().copy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Compute the Q-values using only the stim term
             stim_term_input = curr_stimulus.clone()
             stim_term_input[0] = 0  # Zero out the constant term
+            stim_term_input.to(device)
             stim_q_values = model(stim_term_input)
-            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
+            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().cpu().numpy().copy().shape)
             for i in range(1, num_notes + 1):
                 if tonotopy:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w1[i] * old_w2[:,i]
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * old_w1[i] * old_w2[:,i]
                 else:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w2 @ old_w1[:,i]
-            assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * old_w2 @ old_w1[:,i]
+            assert np.allclose(stim_q_values.clone().detach().cpu().numpy().copy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Calculate the loss for W1
             cortical_loss = reward - curr_q_values[action]
             target_cortical_q_values = curr_q_values.copy()
             target_cortical_q_values[action] = curr_q_values[action] + cortical_loss
-            target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32)
+            target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32).to(device)
 
             loss_l1 = criterion(q_values, target_cortical_q_values)
             expected_loss_l1 = 1/3 * (cortical_loss) ** 2
@@ -705,17 +719,17 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             model.l2_weights_stim.requires_grad = False
             loss_l1.backward(retain_graph=True)
             if tonotopy:
-                w1_grad = model.l1_weights.grad.clone().detach().numpy().copy()
+                w1_grad = model.l1_weights.grad.clone().detach().cpu().numpy().copy()
             else:
-                w1_grad = model.l1_weights.weight.grad.clone().detach().numpy().copy()
+                w1_grad = model.l1_weights.weight.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_const
-            curr_const_q_values = const_q_values.clone().detach().numpy().copy()
+            curr_const_q_values = const_q_values.clone().detach().cpu().numpy().copy()
             const_corticostriatal_loss = reward - curr_const_q_values[action]
             target_const_q_values = curr_const_q_values.copy()
             target_const_q_values[action] = target_const_q_values[action] + const_corticostriatal_loss
-            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
+            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32).to(device)
 
             loss_l2_const = criterion(const_q_values, target_const_q_values)
             expected_loss_l2_const = 1/3 * (const_corticostriatal_loss) ** 2
@@ -730,15 +744,15 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             model.l2_weights_const.requires_grad = True
             model.l2_weights_stim.requires_grad = False
             loss_l2_const.backward(retain_graph=True)
-            w2_const_grad = model.l2_weights_const.grad.clone().detach().numpy().copy()
+            w2_const_grad = model.l2_weights_const.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_stim
-            curr_stim_q_values = stim_q_values.clone().detach().numpy().copy()
+            curr_stim_q_values = stim_q_values.clone().detach().cpu().numpy().copy()
             stim_corticostriatal_loss = reward - curr_stim_q_values[action]
             target_stim_q_values = curr_stim_q_values.copy()
             target_stim_q_values[action] = target_stim_q_values[action] + stim_corticostriatal_loss
-            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
+            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32).to(device)
 
             loss_l2_stim = criterion(stim_q_values, target_stim_q_values)
             expected_loss_l2_stim = 1/3 * (stim_corticostriatal_loss) ** 2
@@ -753,7 +767,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             model.l2_weights_const.requires_grad = False
             model.l2_weights_stim.requires_grad = True
             loss_l2_stim.backward()
-            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().numpy().copy()
+            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Need to unfreeze all the weights again
@@ -765,13 +779,13 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             model.l2_weights_stim.requires_grad = True
 
             if tonotopy:
-                new_w1 = model.l1_weights.clone().detach().numpy().copy()
-                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                new_w1 = model.l1_weights.clone().detach().cpu().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
             else:
-                new_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
-                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                new_w1 = model.l1_weights.weight.clone().detach().cpu().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
 
             delta_w1 = new_w1 - old_w1
             delta_w2_const = new_w2_const - old_w2_const
@@ -790,7 +804,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         expected_w1_grad[i] = curr_stimulus[i] * old_w2[action,i]
                         expected_w2_stim_grad[action, i - 1] = curr_stimulus[i] * old_w1[i]
             else:
-                curr_stimulus_array = curr_stimulus.clone().detach().numpy().copy()
+                curr_stimulus_array = curr_stimulus.clone().detach().cpu().numpy().copy()
                 expected_w2_const_grad[action] = old_w1[0,0] * curr_stimulus_array[0]
                 for i in range(num_notes + 1):
                     if i == 0:
@@ -821,7 +835,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "loss_l2_const": loss_l2_const.item(),
                         "loss_l2_stim": loss_l2_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -839,7 +853,7 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
                         "loss_l2_const": loss_l2_const.item(),
                         "loss_l2_stim": loss_l2_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -893,6 +907,10 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
         assert(model.rpe_type == rpe_type)
         assert(model.tonotopy == tonotopy)
     
+    # Check to see if GPU is available; otherwise, use cpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    
     # If saving the data, start by saving the initialized model
     if save_data:
         if task_id == 0:
@@ -929,11 +947,12 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
         else:
             curr_stimulus, correct_choice = get_general_stimulus()
+        curr_stimulus = curr_stimulus.to(device)
         
         # The output of the network are the Q-values associated with choosing
         # left or right.
         q_values = model(curr_stimulus)
-        curr_q_values = q_values.clone().detach().numpy().copy()
+        curr_q_values = q_values.clone().detach().cpu().numpy().copy()
         
         # Then select an action through a softmax function.
         action, action_probabilities = select_action(curr_q_values, beta=beta)
@@ -949,7 +968,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             # Update the relevant Q-value based on the RPE
             target_q_values = curr_q_values.copy()
             target_q_values[action] = curr_q_values[action] + (reward - curr_q_values[action])
-            target_q_values = torch.tensor(target_q_values, dtype=torch.float32)
+            target_q_values = torch.tensor(target_q_values, dtype=torch.float32).to(device)
             loss = criterion(q_values, target_q_values)
             assert np.isclose(loss.item(), 0.5*(reward - curr_q_values[action])**2)
             
@@ -963,7 +982,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -977,7 +996,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
                         "model": model,
                         "loss": loss.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -994,43 +1013,45 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
         elif model.rpe_type == "partial":
             
             if tonotopy:
-                old_w1 = model.l1_weights.clone().detach().numpy().copy()
-                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w1 = model.l1_weights.clone().detach().cpu().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
                 old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
             else:
-                old_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
-                old_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                old_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                old_w1 = model.l1_weights.weight.clone().detach().cpu().numpy().copy()
+                old_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                old_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
                 old_w2 = np.concatenate((old_w2_const, old_w2_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
+            const_term_input.to(device)
             const_q_values = model(const_term_input)
             if tonotopy:
                 expected_const_q_values = old_w1[0] * old_w2[:,0]
             else:
                 expected_const_q_values = old_w2 @ old_w1[:,0]
-            assert np.allclose(const_q_values.clone().detach().numpy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().numpy()}"
+            assert np.allclose(const_q_values.clone().detach().cpu().numpy().copy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Compute the Q-values using only the stim term
             stim_term_input = curr_stimulus.clone()
             stim_term_input[0] = 0  # Zero out the constant term
+            stim_term_input.to(device)
             stim_q_values = model(stim_term_input)
-            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().numpy().shape)
+            expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().cpu().numpy().copy().shape)
             for i in range(1, num_notes + 1):
                 if tonotopy:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w1[i] * old_w2[:,i]
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * old_w1[i] * old_w2[:,i]
                 else:
-                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().numpy().copy() * old_w2 @ old_w1[:,i]
-            assert np.allclose(stim_q_values.clone().detach().numpy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().numpy()}"
+                    expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * old_w2 @ old_w1[:,i]
+            assert np.allclose(stim_q_values.clone().detach().cpu().numpy().copy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Calculate the loss for W1
             cortical_loss = reward - curr_q_values[action]
             target_cortical_q_values = curr_q_values.copy()
             target_cortical_q_values[action] = curr_q_values[action] + cortical_loss
-            target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32)
+            target_cortical_q_values = torch.tensor(target_cortical_q_values, dtype=torch.float32).to(device)
 
             loss_l1 = criterion(q_values, target_cortical_q_values)
             expected_loss_l1 = 0.5 * (cortical_loss) ** 2
@@ -1046,17 +1067,17 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             model.l2_weights_stim.requires_grad = False
             loss_l1.backward(retain_graph=True)
             if tonotopy:
-                w1_grad = model.l1_weights.grad.clone().detach().numpy().copy()
+                w1_grad = model.l1_weights.grad.clone().detach().cpu().numpy().copy()
             else:
-                w1_grad = model.l1_weights.weight.grad.clone().detach().numpy().copy()
+                w1_grad = model.l1_weights.weight.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_const
-            curr_const_q_values = const_q_values.clone().detach().numpy().copy()
+            curr_const_q_values = const_q_values.clone().detach().cpu().numpy().copy()
             const_corticostriatal_loss = reward - curr_const_q_values[action]
             target_const_q_values = curr_const_q_values.copy()
             target_const_q_values[action] = target_const_q_values[action] + const_corticostriatal_loss
-            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32)
+            target_const_q_values = torch.tensor(target_const_q_values, dtype=torch.float32).to(device)
 
             loss_l2_const = criterion(const_q_values, target_const_q_values)
             expected_loss_l2_const = 0.5 * (const_corticostriatal_loss) ** 2
@@ -1071,15 +1092,15 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             model.l2_weights_const.requires_grad = True
             model.l2_weights_stim.requires_grad = False
             loss_l2_const.backward(retain_graph=True)
-            w2_const_grad = model.l2_weights_const.grad.clone().detach().numpy().copy()
+            w2_const_grad = model.l2_weights_const.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Calculate the loss for W2_stim
-            curr_stim_q_values = stim_q_values.clone().detach().numpy().copy()
+            curr_stim_q_values = stim_q_values.clone().detach().cpu().numpy().copy()
             stim_corticostriatal_loss = reward - curr_stim_q_values[action]
             target_stim_q_values = curr_stim_q_values.copy()
             target_stim_q_values[action] = target_stim_q_values[action] + stim_corticostriatal_loss
-            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32)
+            target_stim_q_values = torch.tensor(target_stim_q_values, dtype=torch.float32).to(device)
 
             loss_l2_stim = criterion(stim_q_values, target_stim_q_values)
             expected_loss_l2_stim = 0.5 * (stim_corticostriatal_loss) ** 2
@@ -1094,7 +1115,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             model.l2_weights_const.requires_grad = False
             model.l2_weights_stim.requires_grad = True
             loss_l2_stim.backward()
-            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().numpy().copy()
+            w2_stim_grad = model.l2_weights_stim.grad.clone().detach().cpu().numpy().copy()
             optimizer.step()
 
             # Need to unfreeze all the weights again
@@ -1106,13 +1127,13 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             model.l2_weights_stim.requires_grad = True
 
             if tonotopy:
-                new_w1 = model.l1_weights.clone().detach().numpy().copy()
-                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                new_w1 = model.l1_weights.clone().detach().cpu().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
             else:
-                new_w1 = model.l1_weights.weight.clone().detach().numpy().copy()
-                new_w2_const = model.l2_weights_const.clone().detach().numpy().copy()
-                new_w2_stim = model.l2_weights_stim.clone().detach().numpy().copy()
+                new_w1 = model.l1_weights.weight.clone().detach().cpu().numpy().copy()
+                new_w2_const = model.l2_weights_const.clone().detach().cpu().numpy().copy()
+                new_w2_stim = model.l2_weights_stim.clone().detach().cpu().numpy().copy()
 
             delta_w1 = new_w1 - old_w1
             delta_w2_const = new_w2_const - old_w2_const
@@ -1131,7 +1152,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
                         expected_w1_grad[i] = curr_stimulus[i] * old_w2[action,i]
                         expected_w2_stim_grad[action, i - 1] = curr_stimulus[i] * old_w1[i]
             else:
-                curr_stimulus_array = curr_stimulus.clone().detach().numpy().copy()
+                curr_stimulus_array = curr_stimulus.clone().detach().cpu().numpy().copy()
                 expected_w2_const_grad[action] = old_w1[0,0] * curr_stimulus_array[0]
                 for i in range(num_notes + 1):
                     if i == 0:
@@ -1162,7 +1183,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
                         "loss_l2_const": loss_l2_const.item(),
                         "loss_l2_stim": loss_l2_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "curr_theta": curr_theta,
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
@@ -1178,7 +1199,7 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
                         "loss_l2_const": loss_l2_const.item(),
                         "loss_l2_stim": loss_l2_stim.item(),
                         "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                         "correct_choice": correct_choice,
                         "q_values": curr_q_values,
                         "action": action,
@@ -1224,6 +1245,10 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
         # Check that the model is the correct type
         assert(type(model) == ShallowSupervisedAuditoryDiscriminationNetwork)
     
+    # Check to see if GPU is available; otherwise, use cpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    
     # If saving the data, start by saving the initialized model
     if save_data:
         if task_id == 0:
@@ -1253,18 +1278,19 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
             curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
         else:
             curr_stimulus, correct_choice = get_general_stimulus()
+        curr_stimulus = curr_stimulus.to(device)
 
         # Assign the correct probabilities for each action
         if correct_choice == 0:
-            target_action_probabilities = torch.tensor([1,0], dtype=torch.float32)
+            target_action_probabilities = torch.tensor([1,0], dtype=torch.float32).to(device)
         elif correct_choice == 1:
-            target_action_probabilities = torch.tensor([0,1], dtype=torch.float32)
+            target_action_probabilities = torch.tensor([0,1], dtype=torch.float32).to(device)
         
         # The output of the network are the probabilities of choosing left or right.
         action_probabilities = model(curr_stimulus)
 
         # To track the accuracy of the model, select an action based on those probabilities
-        action, _ = select_action(action_probabilities.clone().detach().numpy().copy(), beta=beta)
+        action, _ = select_action(action_probabilities.clone().detach().cpu().numpy().copy(), beta=beta)
         
         loss = criterion(action_probabilities, target_action_probabilities)
         optimizer.zero_grad()
@@ -1277,11 +1303,11 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
                     "model": model,
                     "loss": loss.item(),
                     "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                     "curr_theta": curr_theta,
                     "correct_choice": correct_choice,
                     "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
                     "beta": beta
                 }
             else:
@@ -1289,10 +1315,10 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
                     "model": model,
                     "loss": loss.item(),
                     "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                     "correct_choice": correct_choice,
                     "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
                     "beta": beta
                 }
             data.append(trial_data)
@@ -1335,6 +1361,10 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
         assert(type(model) == DeepSupervisedAuditoryDiscriminationNetwork)
         assert(model.tonotopy == tonotopy)
     
+    # Check to see if GPU is available; otherwise, use cpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    
     # If saving the data, start by saving the initialized model
     if save_data:
         if task_id == 0:
@@ -1370,18 +1400,19 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
             curr_stimulus, curr_theta, correct_choice = get_auditory_stimulus(trial_type, task_id, thetas)
         else:
             curr_stimulus, correct_choice = get_general_stimulus()
+        curr_stimulus = curr_stimulus.to(device)
 
         # Assign the correct probabilities for each action
         if correct_choice == 0:
-            target_action_probabilities = torch.tensor([1,0], dtype=torch.float32)
+            target_action_probabilities = torch.tensor([1,0], dtype=torch.float32).to(device)
         elif correct_choice == 1:
-            target_action_probabilities = torch.tensor([0,1], dtype=torch.float32)
+            target_action_probabilities = torch.tensor([0,1], dtype=torch.float32).to(device)
         
         # The output of the network are the probabilities of choosing left or right.
         action_probabilities = model(curr_stimulus)
 
         # To track the accuracy of the model, select an action based on those probabilities
-        action, _ = select_action(action_probabilities.clone().detach().numpy().copy(), beta=beta)
+        action, _ = select_action(action_probabilities.clone().detach().cpu().numpy().copy(), beta=beta)
         
         loss = criterion(action_probabilities, target_action_probabilities)
         optimizer.zero_grad()
@@ -1394,11 +1425,11 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
                     "model": model,
                     "loss": loss.item(),
                     "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                     "curr_theta": curr_theta,
                     "correct_choice": correct_choice,
                     "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
                     "beta": beta
                 }
             else:
@@ -1406,10 +1437,10 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
                     "model": model,
                     "loss": loss.item(),
                     "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().numpy().copy(),
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                     "correct_choice": correct_choice,
                     "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().numpy().copy(),
+                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
                     "beta": beta
                 }
             data.append(trial_data)
