@@ -73,11 +73,26 @@ for thetas in all_thetas:
         for i in range(num_simulations):
             FILE_NAME = "Task " + str(task_id) + ", Theta " + str(thetas[task_id]) + " from Task 0, Theta " + str(thetas[old_task_id]) + " (" + str(ver) + ") (" + str(i) + ")" + ".pk1"
             save_path = Path(base_path + FILE_NAME)
+
+            # Check if the directory exists and if not, create it
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Check if the file exists
             if save_path.exists():
-                with open(save_path, 'rb') as file:
-                    data = pickle.load(file)
+                # Check if you can open the file
+                try:
+                    with open(save_path, 'rb') as file:
+                        data = pickle.load(file)
+                # If not, retrain the network
+                except:
+                    print("Training Network " + str(i))
+                    exp.run_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, p_train=p_train, num_trials=num_trials, 
+                                    learning_rate=learning_rate, beta=beta, depth=depth, rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, save_data=True, save_path=save_path)
+                    continue
+                # If you can open the file, check and see if it's trained all the way
                 if len(data) == num_trials + 1:
                     print("Network " + str(i) + " already exists.")
+                # Otherwise, retrain the network
                 else:
                     print("Training Network " + str(i))
                     exp.run_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, p_train=p_train, num_trials=num_trials, 
