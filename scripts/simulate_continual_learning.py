@@ -85,7 +85,7 @@ for thetas in all_thetas:
                         data = pickle.load(file)
                 # If not, retrain the network
                 except:
-                    print("Training Network " + str(i))
+                    print("File couldn't open. Training Network " + str(i))
                     exp.run_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, p_train=p_train, num_trials=num_trials, 
                                     learning_rate=learning_rate, beta=beta, depth=depth, rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, save_data=True, save_path=save_path)
                     continue
@@ -94,10 +94,10 @@ for thetas in all_thetas:
                     print("Network " + str(i) + " already exists.")
                 # Otherwise, retrain the network
                 else:
-                    print("Training Network " + str(i))
+                    print("Network didn't finish training. Training Network " + str(i))
                     exp.run_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, p_train=p_train, num_trials=num_trials, 
                                     learning_rate=learning_rate, beta=beta, depth=depth, rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, save_data=True, save_path=save_path)
             else:
-                print("Training Network " + str(i))
+                print("Network didn't exist already. Training Network " + str(i))
                 exp.run_experiment(spectrogram=spectrogram, task_id=task_id, thetas=thetas, model_path=model_path, num_notes=num_notes, p_train=p_train, num_trials=num_trials, 
                                 learning_rate=learning_rate, beta=beta, depth=depth, rpe=rpe, rpe_type=rpe_type, tonotopy=tonotopy, save_data=True, save_path=save_path)
