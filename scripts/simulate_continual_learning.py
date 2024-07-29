@@ -12,9 +12,10 @@ learning_rate = 0.05
 beta = 2.5
 depth = True
 rpe = True
-rpe_type = "partial"
+rpe_type = "full"
 tonotopy = True
-base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
+# base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
+base_path = "/Users/megyoung/continual_learning_simulations/"
 
 if depth:
     if rpe:
@@ -62,8 +63,8 @@ else:
 
 all_thetas = [[0, i] for i in range(15, 361, 15)]
 
-for thetas in all_thetas:
-    for j in range(num_simulations):
+for j in range(num_simulations):
+    for thetas in all_thetas:
         ver = j
         old_task_id = 0
         print("Training on Task " + str(task_id) + ", Theta " + str(thetas[task_id]) + " from Task 0, Theta " + str(thetas[old_task_id]) + " (" + str(ver) + ")")

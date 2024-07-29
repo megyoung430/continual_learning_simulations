@@ -1,6 +1,6 @@
 from pathlib import Path
 import src.visualization.plotting_fxns as plot
-import src.simulations.analysis_fxns as anal
+import src.analysis.task0_analysis_fxns as anal
 
 data_directory = Path("/Users/megyoung/continual_learning_simulations/results/trained_models/reward_structure/")
 model_names = ["p_reward_train=0.9 and p_reward_test_validation=0.5",

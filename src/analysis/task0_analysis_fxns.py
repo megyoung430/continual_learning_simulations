@@ -31,7 +31,6 @@ def calculate_accuracy_over_training(data_path, trial_type, window=100):
         accuracy_over_training (num_trials array): Running accuracy of the model after each trial.
     """
     
-
     with open(data_path, 'rb') as file:
         data = pickle.load(file)
 
@@ -109,7 +108,7 @@ def get_loss_over_training(data_path):
 
     num_trials = len(data) - 1
     curr_model = data[0]["model"]
-    if type(curr_model) is DeepRLAuditoryDiscriminationNetwork and curr_model.rpe_type == "partial":
+    if isinstance(DeepRLAuditoryDiscriminationNetwork) and curr_model.rpe_type == "partial":
         loss_l1_over_training = [data[i]["loss_l1"] for i in range(1, num_trials + 1)]
         loss_l2_const_over_training = [data[i]["loss_l2_const"] for i in range(1, num_trials + 1)]
         loss_l2_stim_over_training = [data[i]["loss_l2_stim"] for i in range(1, num_trials + 1)]

@@ -2,7 +2,7 @@
 
 import pickle
 import matplotlib.pyplot as plt
-from ..simulations.analysis_fxns import *
+from ..analysis.task0_analysis_fxns import *
 from ..models.networks import *
 
 def plot_summary_figure(data_path, save_path):

@@ -292,19 +292,16 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    # If saving the data, start by saving the initialized model
-    if save_data:
-        if task_id == 0:
-            data = [{
-                "model": model
-            }]
-        else:
-            data = [{
-                "model": model,
-                "model_path": model_path
-            }]
-        with open(save_path, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
+    # Start by keeping track of the initialized model
+    if task_id == 0:
+        data = [{
+            "model": model
+        }]
+    else:
+        data = [{
+            "model": model,
+            "model_path": model_path
+        }]
     
     if model.rpe_type == "full":
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
@@ -356,37 +353,34 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             loss.backward()
             optimizer.step()
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                }
+            data.append(trial_data)
         
         # If we're using partial RPEs, we update W1_const and W1_stim independently, using three
         # different loss functions
@@ -474,39 +468,40 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             assert np.allclose(delta_w1_const, expected_delta_w1_const, atol=1e-03), f"Expected: {expected_delta_w1_const}, Got: {delta_w1_const}"
             assert np.allclose(delta_w1_stim, expected_delta_w1_stim, atol=1e-03), f"Expected: {expected_delta_w1_stim}, Got: {delta_w1_stim}"
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1_const": loss_l1_const.item(),
-                        "loss_l1_stim": loss_l1_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1_const": loss_l2_const.item(),
-                        "loss_l1_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss_l1_const": loss_l1_const.item(),
+                    "loss_l1_stim": loss_l1_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss_l1_const": loss_l2_const.item(),
+                    "loss_l1_stim": loss_l2_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            data.append(trial_data)
+    
+    if save_data:
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
 
 def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
                                           num_trials=10000, learning_rate=0.1, beta=2.5, reward_volume=20, action_penalty=5, 
@@ -555,19 +550,16 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    # If saving the data, start by saving the initialized model
-    if save_data:
-        if task_id == 0:
-            data = [{
-                "model": model
-            }]
-        else:
-            data = [{
-                "model": model,
-                "model_path": model_path
-            }]
-        with open(save_path, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
+    # Start by keeping track of the initialized model
+    if task_id == 0:
+        data = [{
+            "model": model
+        }]
+    else:
+        data = [{
+            "model": model,
+            "model_path": model_path
+        }]
     
     if model.rpe_type == "full":
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
@@ -624,42 +616,39 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             loss.backward()
             optimizer.step()
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                        "reward_volume": reward_volume,
-                        "action_penalty": action_penalty
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                        "reward_volume": reward_volume,
-                        "action_penalty": action_penalty
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
-        
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                    "reward_volume": reward_volume,
+                    "action_penalty": action_penalty
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                    "reward_volume": reward_volume,
+                    "action_penalty": action_penalty
+                }
+            data.append(trial_data)
+
         # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
         # different loss functions
         elif model.rpe_type == "partial":
@@ -827,45 +816,46 @@ def run_deep_rl_with_inaction_experiment(spectrogram=True, task_id=0, thetas=[0,
             assert np.allclose(delta_w2_const, expected_delta_w2_const, atol=1e-5), f"Expected: {expected_delta_w2_const}, Got: {delta_w2_const}"
             assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-5), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1": loss_l1.item(),
-                        "loss_l2_const": loss_l2_const.item(),
-                        "loss_l2_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                        "reward_volume": reward_volume,
-                        "action_penalty": action_penalty
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1": loss_l1.item(),
-                        "loss_l2_const": loss_l2_const.item(),
-                        "loss_l2_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                        "reward_volume": reward_volume,
-                        "action_penalty": action_penalty
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss_l1": loss_l1.item(),
+                    "loss_l2_const": loss_l2_const.item(),
+                    "loss_l2_stim": loss_l2_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                    "reward_volume": reward_volume,
+                    "action_penalty": action_penalty
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss_l1": loss_l1.item(),
+                    "loss_l2_const": loss_l2_const.item(),
+                    "loss_l2_stim": loss_l2_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                    "reward_volume": reward_volume,
+                    "action_penalty": action_penalty
+                }
+            data.append(trial_data)
+    
+    if save_data:
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
 
 def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
                             num_trials=10000, learning_rate=0.1, beta=2.5, rpe_type="full", tonotopy=False, save_data=True, save_path=None):
@@ -911,19 +901,16 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
-    # If saving the data, start by saving the initialized model
-    if save_data:
-        if task_id == 0:
-            data = [{
-                "model": model
-            }]
-        else:
-            data = [{
-                "model": model,
-                "model_path": model_path
-            }]
-        with open(save_path, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
+    # Start by keeping track of the initialized model
+    if task_id == 0:
+        data = [{
+            "model": model
+        }]
+    else:
+        data = [{
+            "model": model,
+            "model_path": model_path
+        }]
     
     if model.rpe_type == "full":
         optimizer = optim.SGD(model.parameters(), lr=learning_rate)
@@ -976,37 +963,34 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             loss.backward()
             optimizer.step()
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss": loss.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward,
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss": loss.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward,
+                }
+            data.append(trial_data)
         
         # If we're using partial RPEs, we update W1, W2_const, and W2_stim independently, using three
         # different loss functions
@@ -1175,41 +1159,42 @@ def run_deep_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_pat
             assert np.allclose(delta_w2_const, expected_delta_w2_const, atol=1e-5), f"Expected: {expected_delta_w2_const}, Got: {delta_w2_const}"
             assert np.allclose(delta_w2_stim, expected_delta_w2_stim, atol=1e-5), f"Expected: {expected_delta_w2_stim}, Got: {delta_w2_stim}"
 
-            if save_data:
-                if spectrogram:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1": loss_l1.item(),
-                        "loss_l2_const": loss_l2_const.item(),
-                        "loss_l2_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "curr_theta": curr_theta,
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                else:
-                    trial_data = {
-                        "model": model,
-                        "loss_l1": loss_l1.item(),
-                        "loss_l2_const": loss_l2_const.item(),
-                        "loss_l2_stim": loss_l2_stim.item(),
-                        "trial_type": trial_type,
-                        "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                        "correct_choice": correct_choice,
-                        "q_values": curr_q_values,
-                        "action": action,
-                        "action_probabilities": action_probabilities,
-                        "beta": beta,
-                        "reward": reward
-                    }
-                data.append(trial_data)
-                with open(save_path, 'wb') as pickle_file:
-                    pickle.dump(data, pickle_file)
+            if spectrogram:
+                trial_data = {
+                    "model": model,
+                    "loss_l1": loss_l1.item(),
+                    "loss_l2_const": loss_l2_const.item(),
+                    "loss_l2_stim": loss_l2_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "curr_theta": curr_theta,
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            else:
+                trial_data = {
+                    "model": model,
+                    "loss_l1": loss_l1.item(),
+                    "loss_l2_const": loss_l2_const.item(),
+                    "loss_l2_stim": loss_l2_stim.item(),
+                    "trial_type": trial_type,
+                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                    "correct_choice": correct_choice,
+                    "q_values": curr_q_values,
+                    "action": action,
+                    "action_probabilities": action_probabilities,
+                    "beta": beta,
+                    "reward": reward
+                }
+            data.append(trial_data)
+    
+    if save_data:
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
 
 def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, 
                                         num_trials=10000, learning_rate=0.1, beta=2.5, save_data=True, save_path=None):
@@ -1249,19 +1234,16 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
-    # If saving the data, start by saving the initialized model
-    if save_data:
-        if task_id == 0:
-            data = [{
-                "model": model
-            }]
-        else:
-            data = [{
-                "model": model,
-                "model_path": model_path
-            }]
-        with open(save_path, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
+    # Start by keeping track of the initialized model
+    if task_id == 0:
+        data = [{
+            "model": model
+        }]
+    else:
+        data = [{
+            "model": model,
+            "model_path": model_path
+        }]
 
     optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
@@ -1297,33 +1279,34 @@ def run_shallow_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90]
         loss.backward()
         optimizer.step()
 
-        if save_data:
-            if spectrogram:
-                trial_data = {
-                    "model": model,
-                    "loss": loss.item(),
-                    "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                    "curr_theta": curr_theta,
-                    "correct_choice": correct_choice,
-                    "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
-                    "beta": beta
-                }
-            else:
-                trial_data = {
-                    "model": model,
-                    "loss": loss.item(),
-                    "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                    "correct_choice": correct_choice,
-                    "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
-                    "beta": beta
-                }
-            data.append(trial_data)
-            with open(save_path, 'wb') as pickle_file:
-                pickle.dump(data, pickle_file)
+        if spectrogram:
+            trial_data = {
+                "model": model,
+                "loss": loss.item(),
+                "trial_type": trial_type,
+                "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                "curr_theta": curr_theta,
+                "correct_choice": correct_choice,
+                "action": action,
+                "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
+                "beta": beta
+            }
+        else:
+            trial_data = {
+                "model": model,
+                "loss": loss.item(),
+                "trial_type": trial_type,
+                "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                "correct_choice": correct_choice,
+                "action": action,
+                "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
+                "beta": beta
+            }
+        data.append(trial_data)
+    
+    if save_data:
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
 
 def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, 
                                     num_trials=10000, learning_rate=0.1, beta=2.5, tonotopy=False, save_data=True, save_path=None):
@@ -1365,19 +1348,16 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
-    # If saving the data, start by saving the initialized model
-    if save_data:
-        if task_id == 0:
-            data = [{
-                "model": model
-            }]
-        else:
-            data = [{
-                "model": model,
-                "model_path": model_path
-            }]
-        with open(save_path, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
+    # Start by keeping track of the initialized model
+    if task_id == 0:
+        data = [{
+            "model": model
+        }]
+    else:
+        data = [{
+            "model": model,
+            "model_path": model_path
+        }]
 
     if tonotopy:
         optimizer = optim.SGD([
@@ -1419,33 +1399,34 @@ def run_deep_supervised_experiment(spectrogram=True, task_id=0, thetas=[0,90], m
         loss.backward()
         optimizer.step()
 
-        if save_data:
-            if spectrogram:
-                trial_data = {
-                    "model": model,
-                    "loss": loss.item(),
-                    "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                    "curr_theta": curr_theta,
-                    "correct_choice": correct_choice,
-                    "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
-                    "beta": beta
-                }
-            else:
-                trial_data = {
-                    "model": model,
-                    "loss": loss.item(),
-                    "trial_type": trial_type,
-                    "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
-                    "correct_choice": correct_choice,
-                    "action": action,
-                    "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
-                    "beta": beta
-                }
-            data.append(trial_data)
-            with open(save_path, 'wb') as pickle_file:
-                pickle.dump(data, pickle_file)
+        if spectrogram:
+            trial_data = {
+                "model": model,
+                "loss": loss.item(),
+                "trial_type": trial_type,
+                "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                "curr_theta": curr_theta,
+                "correct_choice": correct_choice,
+                "action": action,
+                "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
+                "beta": beta
+            }
+        else:
+            trial_data = {
+                "model": model,
+                "loss": loss.item(),
+                "trial_type": trial_type,
+                "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
+                "correct_choice": correct_choice,
+                "action": action,
+                "action_probabilities": action_probabilities.clone().detach().cpu().numpy().copy(),
+                "beta": beta
+            }
+        data.append(trial_data)
+    
+    if save_data:
+        with open(save_path, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
 
 def run_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_path=None, num_notes=7, p_train=0.8, p_reward_train=1, p_reward_test_validation=0.5,
                     num_trials=10000, learning_rate=0.1, beta=2.5, depth=True, rpe=True, rpe_type="full", with_inaction=False, reward_volume=20,
