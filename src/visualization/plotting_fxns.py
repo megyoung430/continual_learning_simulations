@@ -102,4 +102,4 @@ def plot_validation_accuracy_comparison_across_models(model_names, data_paths_ac
     fig.suptitle("Performance on Validation Trials Across Models")
     plt.show()
 
-def plot_forgetting_over_training(model
+#def plot_forgetting_over_training(model):

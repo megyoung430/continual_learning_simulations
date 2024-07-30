@@ -1,7 +1,7 @@
 from pathlib import Path
 import src.simulations.experiment_fxns as exp
 
-num_simulations = 10
+num_simulations = 5
 spectrogram = True
 task_id = 0
 thetas = [0,90]
@@ -10,60 +10,62 @@ p_train = 1
 num_trials = 10000
 learning_rate = 0.05
 beta = 2.5
-depth = True
+depth = False
 rpe = True
-rpe_type = "full"
-tonotopy = False
+rpe_type = "partial"
+tonotopy = True
 with_inaction = True
 reward_volume = 20
 action_penalty = 5
+base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
+# base_path = "/Users/megyoung/continual_learning_simulations/"
 
 if depth:
     if rpe:
         if with_inaction:
-            base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl_with_inaction/"
+            base_path = base_path + "results/trained_models/deep_rl_with_inaction/"
         else:
             if rpe_type == "full":
                 if spectrogram:
                     if tonotopy:
-                        base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/full_rpe/full_task/diagonal/"
+                        base_path = base_path + "results/trained_models/deep_rl/full_rpe/full_task/diagonal/"
                     else:
-                        base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/full_rpe/full_task/fully_connected/"
+                        base_path = base_path + "results/trained_models/deep_rl/full_rpe/full_task/fully_connected/"
                 else:
-                    base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/full_rpe/simplified_task/"
+                    base_path = base_path + "results/trained_models/deep_rl/full_rpe/simplified_task/"
             else:
                 if spectrogram:
                     if tonotopy:
-                        base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/partial_rpe/full_task/diagonal/"
+                        base_path = base_path + "results/trained_models/deep_rl/partial_rpe/full_task/diagonal/"
                     else:
-                        base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/partial_rpe/full_task/fully_connected/"
+                        base_path = base_path + "results/trained_models/deep_rl/partial_rpe/full_task/fully_connected/"
                 else:
-                    base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_rl/partial_rpe/simplified_task/"
+                    base_path = base_path + "results/trained_models/deep_rl/partial_rpe/simplified_task/"
     else:
         if spectrogram:
             if tonotopy:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_supervised/full_task/diagonal/"
+                base_path = base_path + "results/trained_models/deep_supervised/full_task/diagonal/"
             else:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_supervised/full_task/fully_connected/"
+                base_path = base_path + "results/trained_models/deep_supervised/full_task/fully_connected/"
         else:
-            base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/deep_supervised/simplified_task/"
+            base_path = base_path + "results/trained_models/deep_supervised/simplified_task/"
 else:
     if rpe:
         if rpe_type == "full":
             if spectrogram:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_rl/full_rpe/full_task/"
+                base_path = base_path + "results/trained_models/shallow_rl/full_rpe/full_task/"
             else:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_rl/full_rpe/simplified_task/"
+                base_path = base_path + "results/trained_models/shallow_rl/full_rpe/simplified_task/"
         else:
             if spectrogram:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_rl/partial_rpe/full_task/"
+                base_path = base_path + "results/trained_models/shallow_rl/partial_rpe/full_task/"
             else:
-                base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_rl/partial_rpe/simplified_task/"
+                base_path = base_path + "results/trained_models/shallow_rl/partial_rpe/simplified_task/"
     else:
         if spectrogram:
-            base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_supervised/full_task/"
+            base_path = base_path + "results/trained_models/shallow_supervised/full_task/"
         else:
-            base_path = "/Users/megyoung/continual_learning_simulations/results/trained_models/shallow_supervised/simplified_task/"
+            base_path = base_path + "results/trained_models/shallow_supervised/simplified_task/"
 
 for i in range(num_simulations):
     FILE_NAME = "Task " + str(task_id) + ", Theta " + str(thetas[task_id]) + " (" + str(i) + ")" + ".pk1"

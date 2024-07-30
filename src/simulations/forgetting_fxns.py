@@ -27,8 +27,8 @@ def get_task1_angle(model_path):
     else:
         raise ValueError("The filename does not contain the angle from Task 1.")
 
-def get_optimal_decision_boundary(thetas):
-    
+def get_optimal_decision_boundary(task, thetas):
+
 
 def get_p_train(model_path):
     with open(model_path, 'rb') as file:
