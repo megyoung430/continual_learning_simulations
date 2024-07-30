@@ -15,7 +15,7 @@ def get_all_models(data_directory, model_name):
         model_name (string)
     
     Returns:
-        (list)
+        (list): list of pathlib Path objects that contain model_name
     """
 
     pattern = f"*{model_name}*.pk1"

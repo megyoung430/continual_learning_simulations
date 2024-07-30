@@ -10,12 +10,12 @@ p_train = 1
 num_trials = 10000
 learning_rate = 0.05
 beta = 2.5
-depth = True
-rpe = True
-rpe_type = "full"
-tonotopy = True
-# base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
-base_path = "/Users/megyoung/continual_learning_simulations/"
+depth = False
+rpe = False
+rpe_type = "partial"
+tonotopy = False
+base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
+# base_path = "/Users/megyoung/continual_learning_simulations/"
 
 if depth:
     if rpe:

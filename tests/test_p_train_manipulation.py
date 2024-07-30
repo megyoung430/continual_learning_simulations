@@ -1,4 +1,4 @@
-"""
+
 def check_p_reward_train(data_path):
     with open(data_path, 'rb') as file:
         data = pickle.load(file)
@@ -17,4 +17,3 @@ def check_p_reward_train(data_path):
 
 for path in data_paths_across_models[model_names[0]]:
     check_p_reward_train(path)
-"""

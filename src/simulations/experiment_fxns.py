@@ -486,8 +486,8 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             else:
                 trial_data = {
                     "model": model,
-                    "loss_l1_const": loss_l2_const.item(),
-                    "loss_l1_stim": loss_l2_stim.item(),
+                    "loss_l1_const": loss_l1_const.item(),
+                    "loss_l1_stim": loss_l1_stim.item(),
                     "trial_type": trial_type,
                     "curr_stimulus": curr_stimulus.clone().detach().cpu().numpy().copy(),
                     "correct_choice": correct_choice,
