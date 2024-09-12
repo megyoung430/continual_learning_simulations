@@ -1,6 +1,7 @@
 """This file specifies all the functions needed to run a complete simulation of 
 our continual learning task."""
 
+import pdb
 import random
 import pickle
 import numpy as np
@@ -387,17 +388,14 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
         elif model.rpe_type == "partial":
             old_w1_const = model.l1_weights_const.clone().detach().cpu().numpy().copy()
             old_w1_stim = model.l1_weights_stim.clone().detach().cpu().numpy().copy()
-
-            w1_const = model.l1_weights_const.clone().detach().cpu().numpy().copy()
-            w1_stim = model.l1_weights_stim.clone().detach().cpu().numpy().copy()
-            w1 = np.concatenate((w1_const, w1_stim), axis=1)
+            old_w1 = np.concatenate((old_w1_const, old_w1_stim), axis=1)
 
             # Compute the Q-values using only the const term
             const_term_input = curr_stimulus.clone()
             const_term_input[1:] = 0  # Zero out stimulus terms
             const_term_input.to(device)
             const_q_values = model(const_term_input)
-            expected_const_q_values = w1[0]
+            expected_const_q_values = old_w1[:,0]
             assert np.allclose(const_q_values.clone().detach().cpu().numpy().copy(), expected_const_q_values, atol=1e-03), f"Expected: {expected_const_q_values}, Got: {const_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Compute the Q-values using only the stim term
@@ -407,7 +405,7 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             stim_q_values = model(stim_term_input)
             expected_stim_q_values = np.zeros(shape=stim_q_values.clone().detach().cpu().numpy().copy().shape)
             for i in range(1, num_notes + 1):
-                expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * w1[i]
+                expected_stim_q_values = expected_stim_q_values + curr_stimulus[i].clone().detach().cpu().numpy().copy() * old_w1[:,i]
             assert np.allclose(stim_q_values.clone().detach().cpu().numpy().copy(), expected_stim_q_values, atol=1e-03), f"Expected: {expected_stim_q_values}, Got: {stim_q_values.clone().detach().cpu().numpy().copy()}"
 
             # Calculate the loss for W1_const
@@ -460,11 +458,10 @@ def run_shallow_rl_experiment(spectrogram=True, task_id=0, thetas=[0,90], model_
             expected_delta_w1_stim = np.zeros(shape=delta_w1_stim.shape)
 
             for i in range(1, num_notes + 1):
-                expected_delta_w1_stim[action, i - 1] = curr_stimulus[i] * w1[i]
+                expected_delta_w1_stim[action, i - 1] = curr_stimulus[i].clone().detach().cpu().numpy().copy()
 
-            expected_delta_w1_const[action] = learning_rate * const_corticostriatal_loss * w1[0]
+            expected_delta_w1_const[action] = learning_rate * const_corticostriatal_loss
             expected_delta_w1_stim = learning_rate * stim_corticostriatal_loss * expected_delta_w1_stim
-
             assert np.allclose(delta_w1_const, expected_delta_w1_const, atol=1e-03), f"Expected: {expected_delta_w1_const}, Got: {delta_w1_const}"
             assert np.allclose(delta_w1_stim, expected_delta_w1_stim, atol=1e-03), f"Expected: {expected_delta_w1_stim}, Got: {delta_w1_stim}"
 
