@@ -235,9 +235,13 @@ def assess_forgetting(model_path, num_evaluations=100, training_window=100, thet
         _type_: _description_
     """
 
+    # Force everything to be loaded onto the CPU
+    device = torch.device('cpu')
+
+    # Use torch.load to load the .pkl file and ensure tensors are loaded to CPU
     with open(model_path, 'rb') as file:
-        data = pickle.load(file)
-    
+        data = torch.load(file, map_location=device)
+
     # Get the relevant task info
     trial_type = "train"
     task_id = 0
@@ -245,8 +249,6 @@ def assess_forgetting(model_path, num_evaluations=100, training_window=100, thet
     theta_1 = get_task1_angle(model_path)
     thetas = [theta_0, theta_1]
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     test_thetas = np.arange(0, 361, theta_window)
     points_in_training = np.arange(0, len(data) - 1, training_window)
     actions_across_points = []

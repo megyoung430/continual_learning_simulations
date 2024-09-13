@@ -4,12 +4,12 @@ import src.simulations.forgetting_fxns as forg
 
 num_simulations = 5
 spectrogram = True
-depth = True
+depth = False
 rpe = True
-rpe_type = "full"
-tonotopy = True
-base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
-# base_path = "/Users/megyoung/continual_learning_simulations/"
+rpe_type = "partial"
+tonotopy = False
+#base_path = "/ceph/saxe/myoung/continual_learning_simulations/"
+base_path = "/Users/megyoung/continual_learning_simulations/"
 
 if depth:
     if rpe:
